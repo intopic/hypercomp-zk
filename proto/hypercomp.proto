@@ -1,0 +1,175 @@
+syntax = "proto3";
+
+package hypercomp.v2;
+
+// Al-Samawal Rollup HyperCompressor Pro Sidecar gRPC Service.
+// Deployed alongside an EVM ZK-Rollup Sequencer / Batcher to compress DA blobs
+// before posting to Ethereum L1 blobs or Bitcoin Taproot witnesses.
+service HyperCompressor {
+  // Liveness, readiness, license status, loaded dictionaries, and cumulative compression stats.
+  rpc Health (HealthRequest) returns (HealthResponse);
+
+  // Compress contract-grouped EVM state transitions `(address, slot, old_val -> new_val)`
+  // into optimal `StateDeltas` wire format (DeltaOp + Rhind + Struct-Delta + Zstd/Dict).
+  rpc CompressDeltas (CompressDeltasRequest) returns (CompressResponse);
+
+  // Deterministically decompress & verify a `StateDeltas` blob via the `#![no_std]` decoder.
+  rpc DecompressDeltas (DecompressRequest) returns (DecompressDeltasResponse);
+
+  // Compress stateless contract-grouped EVM state updates `(address, slot, new_val)`.
+  rpc CompressUpdates (CompressUpdatesRequest) returns (CompressResponse);
+
+  // Deterministically decompress & verify a `StateUpdates` blob via the `#![no_std]` decoder.
+  rpc DecompressUpdates (DecompressRequest) returns (DecompressUpdatesResponse);
+
+  // Parallel multi-batch compression across CPU cores via Rayon (for high-TPS batchers).
+  rpc CompressMultiBatch (CompressMultiBatchRequest) returns (CompressMultiBatchResponse);
+
+  // Train a chain-specific Zstd dictionary from historical EVM batches and hot-register it.
+  rpc TrainDictionary (TrainDictionaryRequest) returns (TrainDictionaryResponse);
+
+  // Load an existing pre-shared Zstd dictionary into the sidecar registry.
+  rpc LoadDictionary (LoadDictionaryRequest) returns (LoadDictionaryResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string version = 1;
+  repeated uint32 loaded_dict_ids = 2;
+  uint64 total_batches_compressed = 3;
+  uint64 total_raw_bytes = 4;
+  uint64 total_compressed_bytes = 5;
+  // Offline Ed25519 license status ("evaluation", "pro", "enterprise")
+  string license_tier = 6;
+  string license_client_id = 7;
+  uint64 license_expires_at = 8;      // Unix epoch seconds (0 in evaluation mode)
+  uint64 daily_batches_used = 9;      // Batches compressed in current UTC day
+  uint64 daily_batches_limit = 10;    // 50 in evaluation mode; 0 = unlimited
+}
+
+// Single storage transition for Delta-DA mode (`old_val -> new_val`).
+message StorageTransitionMsg {
+  bytes slot = 1;     // 32-byte big-endian EVM storage slot
+  bytes old_val = 2;  // 32-byte big-endian previous value
+  bytes new_val = 3;  // 32-byte big-endian new value
+}
+
+message ContractTransitionMsg {
+  bytes address = 1; // 20-byte EVM contract address
+  optional uint64 nonce = 2;
+  repeated StorageTransitionMsg storage = 3;
+}
+
+// Single storage update for stateless Update-DA mode (`new_val` only).
+message StorageUpdateMsg {
+  bytes slot = 1;    // 32-byte big-endian EVM storage slot
+  bytes new_val = 2; // 32-byte big-endian new value
+}
+
+message ContractUpdateMsg {
+  bytes address = 1; // 20-byte EVM contract address
+  optional uint64 nonce = 2;
+  repeated StorageUpdateMsg storage = 3;
+}
+
+// Decoded DeltaOp returned by `DecompressDeltas`.
+message DeltaOpMsg {
+  enum Kind {
+    NO_CHANGE = 0;
+    SET_NEW = 1;
+    ADD = 2;
+    SUB = 3;
+    XOR_SHIFTED = 4;
+  }
+  Kind kind = 1;
+  uint32 xor_shift = 2; // byte shift (0..31) when kind == XOR_SHIFTED
+  bytes value = 3;      // 32-byte big-endian U256 operand (empty when NO_CHANGE)
+}
+
+message StorageDeltaMsg {
+  bytes slot = 1;
+  DeltaOpMsg op = 2;
+}
+
+message ContractDeltaMsg {
+  bytes address = 1;
+  optional uint64 nonce = 2;
+  repeated StorageDeltaMsg storage = 3;
+}
+
+enum EntropyMode {
+  ENTROPY_ZSTD = 0;           // Standard Zstd (default)
+  ENTROPY_ZSTD_WITH_DICT = 1; // Zstd with registered `dict_id`
+  ENTROPY_NONE = 2;           // Pre-entropy stream only (lowest zkVM cycles)
+}
+
+message CompressDeltasRequest {
+  repeated ContractTransitionMsg contracts = 1;
+  int32 zstd_level = 2;       // 0 uses server default (9); valid 1..=19
+  EntropyMode entropy = 3;
+  uint32 dict_id = 4;         // Required when entropy == ENTROPY_ZSTD_WITH_DICT
+}
+
+message CompressUpdatesRequest {
+  repeated ContractUpdateMsg contracts = 1;
+  int32 zstd_level = 2;
+  EntropyMode entropy = 3;
+  uint32 dict_id = 4;
+}
+
+message CompressResponse {
+  bytes blob = 1;
+  uint64 raw_bytes = 2;
+  uint64 compressed_bytes = 3;
+  double compression_ratio = 4;
+  uint64 encode_micros = 5;
+  uint32 dict_id_used = 6;
+}
+
+message DecompressRequest {
+  bytes blob = 1;
+  uint32 dict_id = 2; // Optional: auto-resolved from wire header when registered in sidecar
+}
+
+message DecompressDeltasResponse {
+  repeated ContractDeltaMsg contracts = 1;
+  uint64 total_slots = 2;
+  uint64 decode_micros = 3;
+}
+
+message DecompressUpdatesResponse {
+  repeated ContractUpdateMsg contracts = 1;
+  uint64 total_slots = 2;
+  uint64 decode_micros = 3;
+}
+
+message CompressMultiBatchRequest {
+  repeated CompressDeltasRequest batches = 1;
+}
+
+message CompressMultiBatchResponse {
+  repeated CompressResponse results = 1;
+  uint64 total_wall_micros = 2;
+}
+
+message TrainDictionaryRequest {
+  repeated CompressDeltasRequest delta_samples = 1;
+  repeated CompressUpdatesRequest update_samples = 2;
+  uint32 max_dict_bytes = 3; // Default 114688 (112 KB) if 0
+}
+
+message TrainDictionaryResponse {
+  uint32 dict_id = 1;
+  bytes dict_bytes = 2;
+  uint32 sample_count = 3;
+}
+
+message LoadDictionaryRequest {
+  bytes dict_bytes = 1;
+}
+
+message LoadDictionaryResponse {
+  uint32 dict_id = 1;
+  uint64 dict_size = 2;
+}

@@ -1,0 +1,12 @@
+[package]
+name = "hypercomp-sp1-guest"
+version = "0.2.0"
+edition = "2021"
+description = "Succinct SP1 zkVM guest program verifying Al-Samawal HyperCompressor state-diff blobs"
+license = "MIT OR Apache-2.0"
+
+[workspace]
+
+[dependencies]
+sp1-zkvm = "4.0"
+hypercomp-decoder = { path = "../../crates/hypercomp-decoder", default-features = false, features = ["zstd-nostd"] }

@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hypercomp-decoder",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.87"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/alsamawal-rollup/hypercomp-zk"
+homepage = "https://github.com/alsamawal-rollup/hypercomp-zk"
+authors = ["Al-Samawal HyperCompressor Contributors"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

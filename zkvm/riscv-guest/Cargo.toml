@@ -1,0 +1,18 @@
+[package]
+name = "hypercomp-riscv-guest"
+version = "0.2.0"
+edition = "2021"
+description = "Bare-metal RV32IM (#![no_std]) zkVM guest binary for exact cycle benchmarking of hypercomp-decoder"
+license = "MIT OR Apache-2.0"
+
+[workspace]
+
+[dependencies]
+hypercomp-decoder = { path = "../../crates/hypercomp-decoder", default-features = false, features = ["zstd-nostd"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = false

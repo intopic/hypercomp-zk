@@ -1,0 +1,30 @@
+name: CI (Open-Source Decoder & RISC-V zkVM)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv32im-unknown-none-elf
+
+      - name: Run unit & adversarial tests (10,000 fuzz inputs)
+        run: cargo test --workspace --all-features
+
+      - name: Check pure #![no_std] zero-dependency build (RV32IM)
+        run: cargo check -p hypercomp-decoder --target riscv32im-unknown-none-elf --no-default-features
+
+      - name: Check #![no_std] + pure-Rust ruzstd build (RV32IM)
+        run: cargo check -p hypercomp-decoder --target riscv32im-unknown-none-elf --no-default-features --features zstd-nostd
+
+      - name: Build bare-metal RV32IM zkVM guest ELF
+        run: cargo build --release --manifest-path zkvm/riscv-guest/Cargo.toml
+
+      - name: Verify crates.io package dry-run
+        run: cargo publish -p hypercomp-decoder --dry-run

@@ -1,0 +1,5 @@
+/target/
+zkvm/*/target/
+Cargo.lock
+*.swp
+.DS_Store
