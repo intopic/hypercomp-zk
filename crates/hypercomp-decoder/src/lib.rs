@@ -29,8 +29,8 @@ pub mod varint;
 
 pub use error::HyperCompError;
 pub use header::{
-    compute_dict_id, EntropyCodec, PayloadKind, WireHeader, FORMAT_VERSION, MAGIC,
-    MAX_DECOMPRESSED_BYTES, MAX_DECODE_ITEMS,
+    compute_dict_id, is_raw_zstd_fallback, EntropyCodec, PayloadKind, WireHeader, FORMAT_VERSION,
+    MAGIC, MAX_DECOMPRESSED_BYTES, MAX_DECODE_ITEMS, ZSTD_MAGIC,
 };
 pub use poly::{alsamawal_poly_decode, alsamawal_poly_decode_exact};
 pub use rhind::{delta_decode_column, rhind_decode_column, rhind_decode_u256, DeltaOp};

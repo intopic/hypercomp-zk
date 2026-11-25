@@ -46,7 +46,7 @@ hypercomp-decoder = { version = "0.2", default-features = false, features = ["zs
 cargo test --workspace
 rustup target add riscv32im-unknown-none-elf
 cargo check -p hypercomp-decoder --target riscv32im-unknown-none-elf --no-default-features --features zstd-nostd
-cargo build --release --manifest-path zkvm/riscv-guest/Cargo.toml
+(cd zkvm/riscv-guest && cargo build --release)
 ```
 
 ### 3. Benchmark Your Own EVM Rollup Live (Prebuilt CLI)

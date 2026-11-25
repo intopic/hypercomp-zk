@@ -12,8 +12,9 @@ use hypercomp_decoder::{
     alsamawal_poly_decode, decode_state_deltas_raw, decode_state_transitions_raw,
     decode_state_updates_raw, decode_varint_u128, decode_varint_u32, decode_varint_u64,
     decompress_state_deltas, decompress_state_transitions, decompress_state_updates,
-    rhind_decode_u256, DecodeLimits, HyperCompError, PayloadKind, WireHeader, FORMAT_VERSION,
-    MAGIC, POW10, U256,
+    is_raw_zstd_fallback, rhind_decode_u256, ContractDelta, ContractDiff, DecodeLimits, DeltaOp,
+    HyperCompError, PayloadKind, StateDiff, StorageDelta, StorageUpdate, WireHeader,
+    FORMAT_VERSION, MAGIC, POW10, U256, ZSTD_MAGIC,
 };
 
 #[test]
@@ -261,22 +262,151 @@ fn test_adversarial_zero_panic_fuzz_10000_random_blobs() {
         for b in &mut buf {
             *b = (next_u64(&mut state) & 0xFF) as u8;
         }
-        // Half the time inject a valid header prefix to stress deeper decoder paths!
-        if len >= 4 && (case % 2 == 0) {
+        // Half the time inject a valid header prefix (or ZSTD_MAGIC) to stress deeper decoder paths!
+        if len >= 4 && (case % 3 == 0) {
             buf[0] = MAGIC[0];
             buf[1] = MAGIC[1];
             buf[2] = FORMAT_VERSION;
             buf[3] = (case % 3) as u8; // EntropyCodec::None with kinds 0, 1, 2
+        } else if len >= 4 && (case % 3 == 1) {
+            buf[0..4].copy_from_slice(&ZSTD_MAGIC);
         }
 
         // None of these calls may EVER panic!
         let _ = decode_state_transitions_raw(&buf, tight_limits);
         let _ = decode_state_updates_raw(&buf, tight_limits);
         let _ = decode_state_deltas_raw(&buf, tight_limits);
+        let _ = StateDiff::from_raw_bytes(&buf, tight_limits);
+        let _ = ContractDiff::from_raw_bytes(&buf, tight_limits);
+        let _ = ContractDelta::from_raw_bytes(&buf, tight_limits);
         let _ = decompress_state_transitions(&buf, None);
         let _ = decompress_state_updates(&buf, None);
         let _ = decompress_state_deltas(&buf, None);
         let _ = rhind_decode_u256(&buf, &mut 0);
         let _ = alsamawal_poly_decode(&buf, &mut 0, 4096);
     }
+}
+
+#[test]
+fn test_raw_fallback_canonicality_and_bounds() {
+    assert!(is_raw_zstd_fallback(&ZSTD_MAGIC));
+    assert!(!is_raw_zstd_fallback(&[MAGIC[0], MAGIC[1], FORMAT_VERSION, 0]));
+
+    // Exact roundtrip of ContractDiff & ContractDelta canonical raw bytes
+    let upd = vec![ContractDiff {
+        address: [0x11; 20],
+        nonce: Some(7),
+        storage_updates: vec![StorageUpdate {
+            slot: [0x22; 32],
+            new_val: U256::from_u64(12345),
+        }],
+    }];
+    let raw_u = ContractDiff::to_raw_bytes(&upd);
+    assert_eq!(
+        ContractDiff::from_raw_bytes(&raw_u, DecodeLimits::default()).unwrap(),
+        upd
+    );
+
+    let del = vec![ContractDelta {
+        address: [0x33; 20],
+        nonce: None,
+        storage_deltas: vec![
+            StorageDelta {
+                slot: [0x01; 32],
+                op: DeltaOp::NoChange,
+            },
+            StorageDelta {
+                slot: [0x02; 32],
+                op: DeltaOp::SetNew(U256::ZERO),
+            },
+            StorageDelta {
+                slot: [0x03; 32],
+                op: DeltaOp::Add(U256::from_u128(10u128.pow(18))),
+            },
+            StorageDelta {
+                slot: [0x04; 32],
+                op: DeltaOp::Sub(U256::from_u64(99)),
+            },
+            StorageDelta {
+                slot: [0x05; 32],
+                op: DeltaOp::XorShifted {
+                    shift: 4,
+                    mask: U256::from_u64(0x1234),
+                },
+            },
+        ],
+    }];
+    let raw_d = ContractDelta::to_raw_bytes(&del);
+    assert_eq!(
+        ContractDelta::from_raw_bytes(&raw_d, DecodeLimits::default()).unwrap(),
+        del
+    );
+
+    // Verify pure-SetNew 32B-hash ContractDelta::to_raw_bytes is bit-identical to ContractDiff::to_raw_bytes (0 B overhead!)
+    let hash_val = U256([0xAB; 32]);
+    let hash_upd = vec![ContractDiff {
+        address: [0x16; 20],
+        nonce: None,
+        storage_updates: vec![StorageUpdate {
+            slot: [0x01; 32],
+            new_val: hash_val,
+        }],
+    }];
+    let hash_del = vec![ContractDelta {
+        address: [0x16; 20],
+        nonce: None,
+        storage_deltas: vec![StorageDelta {
+            slot: [0x01; 32],
+            op: DeltaOp::SetNew(hash_val),
+        }],
+    }];
+    let raw_hash_del = ContractDelta::to_raw_bytes(&hash_del);
+    assert_eq!(raw_hash_del, ContractDiff::to_raw_bytes(&hash_upd));
+    assert_eq!(
+        ContractDelta::from_raw_bytes(&raw_hash_del, DecodeLimits::default()).unwrap(),
+        hash_del
+    );
+
+    // Reject invalid packed op tag (> 0x81) in compact raw delta mode (flags = 0x80)
+    let mut bad_tag = Vec::new();
+    bad_tag.extend_from_slice(&[0x33; 20]);
+    bad_tag.push(0x80); // compact mode, has_nonce = 0
+    bad_tag.extend_from_slice(&1u32.to_be_bytes());
+    bad_tag.extend_from_slice(&[0x01; 32]); // slot
+    bad_tag.push(0x82); // invalid tag > 0x81!
+    assert_eq!(
+        ContractDelta::from_raw_bytes(&bad_tag, DecodeLimits::default()),
+        Err(HyperCompError::InvalidTag(0x82))
+    );
+
+    // Reject leading zero byte in packed compact raw delta SetNew (tag 0x03 = SetNew len 2)
+    let mut bad_leading_zero = Vec::new();
+    bad_leading_zero.extend_from_slice(&[0x33; 20]);
+    bad_leading_zero.push(0x80);
+    bad_leading_zero.extend_from_slice(&1u32.to_be_bytes());
+    bad_leading_zero.extend_from_slice(&[0x01; 32]);
+    bad_leading_zero.push(0x03); // SetNew with len = 2
+    bad_leading_zero.extend_from_slice(&[0x00, 0x05]); // non-minimal leading zero!
+    assert_eq!(
+        ContractDelta::from_raw_bytes(&bad_leading_zero, DecodeLimits::default()),
+        Err(HyperCompError::NonCanonicalEncoding)
+    );
+
+    // Reject invalid has_nonce flag (> 1)
+    let mut bad_nonce_flag = raw_u.clone();
+    bad_nonce_flag[20] = 2;
+    assert_eq!(
+        ContractDiff::from_raw_bytes(&bad_nonce_flag, DecodeLimits::default()),
+        Err(HyperCompError::InvalidTag(2))
+    );
+
+    // Reject slot count exceeding DecodeLimits
+    let tight = DecodeLimits {
+        max_items: 2,
+        max_decompressed_bytes: 1024,
+    };
+    assert_eq!(
+        ContractDelta::from_raw_bytes(&raw_d, tight),
+        Err(HyperCompError::LimitExceeded)
+    );
 }

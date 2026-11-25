@@ -3,6 +3,16 @@ use crate::error::HyperCompError;
 /// Two-byte magic header identifying an Al-Samawal HyperCompressor frame.
 pub const MAGIC: [u8; 2] = *b"AS";
 
+/// Four-byte RFC 8878 magic identifying an automatic Raw Zstd fallback frame
+/// (disjoint from `MAGIC = b"AS"`, zero header overhead for tiny/incompressible batches).
+pub const ZSTD_MAGIC: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
+
+/// Returns `true` when `blob` is a standard RFC 8878 Zstd fallback frame (0-byte HC overhead).
+#[inline]
+pub fn is_raw_zstd_fallback(blob: &[u8]) -> bool {
+    blob.len() >= ZSTD_MAGIC.len() && blob[..4] == ZSTD_MAGIC
+}
+
 /// Current versioned wire format.
 pub const FORMAT_VERSION: u8 = 2;
 
