@@ -11,10 +11,12 @@
 //!    - On **Ethereum EIP-4844**, pair with a KZG point-evaluation / equivalence proof linking
 //!      `blob_sha256` to the EIP-4844 blob `versioned_hash`.
 //!    - On **Bitcoin (e.g. Citrea)**, pair with a Bitcoin light-client Taproot witness inclusion proof.
-//! 3. **Prover-Fault Separation:** Prover-controlled dictionary witness faults (`MissingDictionary`,
-//!    `DictionaryIdMismatch`) **abort proving** instead of committing `is_valid = false`, so a
-//!    malicious prover can NEVER mark an honest batch invalid by withholding/swapping the dictionary.
-//!    Intrinsic blob defects commit `(is_valid = false, error_code = err.code())` cleanly.
+//! 3. **Total Provability (`R3-2`):** EVERY decode error — including `MissingDictionary` and
+//!    `DictionaryIdMismatch` — commits `(is_valid = false, error_code = err.code())`; the guest never
+//!    aborts on blob content. A malicious prover cannot use this to suppress an honest batch, because
+//!    withholding or swapping the dictionary changes `journal.dict_sha256`, which rule 1 rejects.
+//!    Conversely, a blob whose header references an unapproved dictionary is provably invalid
+//!    (`error_code = 18`) instead of being unprovable (which would halt permissionless DA chains).
 //! 4. **Consensus Limit Parity (`N-1` / `N-2`):** Uses `DecodeLimits::CONSENSUS`, identical to the
 //!    encoder, sidecar, and L2 full nodes (`100k` slots, `8 MiB` pre-entropy, `8 MiB` Zstd window,
 //!    `16 MiB` calibrated output, mandatory `Frame_Content_Size` + XXH64 checksum).
@@ -61,11 +63,8 @@ fn main() {
             ));
         }
         Err(err) => {
-            // Prover-supplied witness faults MUST abort proving (never emit `is_valid = false`).
-            assert!(
-                !err.is_prover_witness_error(),
-                "prover supplied missing or mismatched Zstd dictionary witness"
-            );
+            // Commit every failure (incl. dictionary faults, codes 17/18); verifier rule 1 binds
+            // `dict_sha256` to the approved dictionary, so the prover cannot fake invalidity (`R3-2`).
             env::commit(&(
                 blob_sha256,
                 dict_sha256,

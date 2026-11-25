@@ -23,7 +23,10 @@ pub fn is_raw_zstd_fallback(blob: &[u8]) -> bool {
 pub const FORMAT_VERSION: u8 = 3;
 
 /// Canonical consensus hard cap on items (contracts or storage slots) decoded in a single batch.
-/// Chosen so worst-case bump-allocator zkVM peak memory stays safely under a 48 MiB guest heap.
+/// Together with the byte limits below, the measured worst-case *cumulative* allocation under a
+/// non-freeing bump allocator is ~50 MiB (100k random slots) / ~57 MiB (random transitions);
+/// zkVM guests should provision >= 96 MiB of heap (R3-1). See `tests/bump_envelope.rs` in the
+/// Pro encoder for the enforced regression bound.
 pub const MAX_DECODE_ITEMS: u32 = 100_000;
 
 /// Canonical consensus hard cap on Zstd-decompressed pre-entropy or raw fallback payload (8 MiB).
@@ -35,14 +38,16 @@ pub const MAX_ZSTD_WINDOW_BYTES: usize = 8 * 1024 * 1024;
 /// Canonical consensus hard cap on calibrated decoded in-memory output footprint (16 MiB).
 pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 
-/// Calibrated peak heap estimate per storage slot (bytes), including intermediate columnar vectors
-/// and final `StorageUpdate`/`StorageDelta` allocations under bump-allocator zkVM guests (`N-2`).
+/// Consensus accounting weight per storage slot (bytes) used by `max_output_bytes`. This bounds the
+/// *net live* decoded footprint (~143 B/slot measured); it is NOT the cumulative bump-allocator
+/// total, which additionally includes the decompression buffer and `ruzstd` window (R3-1).
 pub const EST_BYTES_PER_SLOT: usize = 144;
 
-/// Calibrated peak heap estimate per contract header overhead (bytes).
+/// Consensus accounting weight per contract header overhead (bytes).
 pub const EST_BYTES_PER_CONTRACT_OVERHEAD: usize = 64;
 
-/// Calibrated peak heap estimate per `StateDiff` transition record (bytes).
+/// Consensus accounting weight per `StateDiff` transition record (bytes); like
+/// [`EST_BYTES_PER_SLOT`] this is an accounting weight, not a cumulative heap bound (R3-1).
 pub const EST_BYTES_PER_TRANSITION: usize = 240;
 
 /// Structured payload schema carried inside the compressed frame.

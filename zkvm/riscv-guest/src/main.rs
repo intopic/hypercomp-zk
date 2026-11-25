@@ -22,14 +22,16 @@ use hypercomp_decoder::{
 };
 
 // ---------------------------------------------------------------------------
-// MEMORY MAP (64 MiB Flat zkVM RAM: 0x8000_0000 .. 0x8400_0000)
+// MEMORY MAP (128 MiB Flat zkVM RAM: 0x8000_0000 .. 0x8800_0000)
+// Heap sized for the measured worst-case bump-allocator footprint under
+// `DecodeLimits::CONSENSUS` (~50-57 MiB cumulative, R3-1) with >= 39 MiB headroom.
 // ---------------------------------------------------------------------------
 const HEAP_START: usize = 0x8040_0000;
-const HEAP_END: usize = 0x8340_0000; // 48 MiB guest heap
-const INPUT_MAILBOX: usize = 0x8340_0000; // 11 MiB input buffer
-const INPUT_MAILBOX_SIZE: usize = OUTPUT_MAILBOX - INPUT_MAILBOX; // 11 MiB hard upper bound
-const OUTPUT_MAILBOX: usize = 0x83F0_0000; // output commitment & stats
-// Stack starts at 0x83FF_FFF0 (growing downward toward OUTPUT_MAILBOX + 64 KiB)
+const HEAP_END: usize = 0x8640_0000; // 96 MiB guest heap
+const INPUT_MAILBOX: usize = 0x8640_0000; // 27 MiB input buffer
+const INPUT_MAILBOX_SIZE: usize = OUTPUT_MAILBOX - INPUT_MAILBOX; // 27 MiB hard upper bound
+const OUTPUT_MAILBOX: usize = 0x87F0_0000; // output commitment & stats
+// Stack starts at 0x87FF_FFF0 (growing downward toward OUTPUT_MAILBOX + 64 KiB)
 
 // Startup assembly: initialize stack pointer, zero .bss, jump to rust_main, then halt.
 global_asm!(
@@ -37,7 +39,7 @@ global_asm!(
     .section .text.init
     .globl _start
 _start:
-    li sp, 0x83FFFFF0
+    li sp, 0x87FFFFF0
     la t0, __bss_start
     la t1, __bss_end
 1:

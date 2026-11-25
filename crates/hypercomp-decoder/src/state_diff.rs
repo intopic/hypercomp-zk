@@ -603,8 +603,9 @@ impl StarknetContractDelta {
 /// Safety limits enforced identically across encoder, sidecar, full nodes, and zkVM guests (`N-1`).
 ///
 /// Using a single canonical consensus profile (`DecodeLimits::CONSENSUS`) guarantees that every
-/// batch accepted by the encoder & L2 full nodes also decodes inside a 48 MiB bump-allocator
-/// 32-bit RISC-V zkVM guest without OOM or consensus divergence.
+/// batch accepted by the encoder & L2 full nodes also decodes inside a 32-bit RISC-V zkVM guest
+/// provisioned with >= 96 MiB of bump-allocator heap (measured worst case ~50-57 MiB cumulative,
+/// R3-1) without OOM or consensus divergence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DecodeLimits {
     pub max_items: u32,

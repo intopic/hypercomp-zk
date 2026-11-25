@@ -2,16 +2,16 @@
 name = "hypercomp-sp1-guest"
 version = "0.2.0"
 edition = "2021"
-description = "Succinct SP1 zkVM guest program verifying Al-Samawal HyperCompressor state-diff blobs"
+description = "Succinct SP1 v6 zkVM guest program verifying Al-Samawal HyperCompressor v3 state-diff blobs"
 license = "MIT OR Apache-2.0"
 
 [workspace]
 
 [dependencies]
-sp1-zkvm = "4.0"
+sp1-zkvm = "6.10.0"
 hypercomp-decoder = { path = "../../crates/hypercomp-decoder", default-features = false, features = ["zstd-nostd"] }
 
-# Enable Succinct SP1 hardware-accelerated SHA-256 precompile for `sha2 0.10` (`N-5`).
-# Without this patch, SHA-256 runs in pure software (~6.56M RV32IM instructions per 112 KB dict).
+# Enable Succinct SP1 v6.10.0 hardware-accelerated SHA-256 precompile for `sha2 0.10.9` (`N-5`).
+# Cuts 112 KB dictionary SHA-256 from ~6.56M software RV32IM cycles down to hardware precompile syscalls.
 [patch.crates-io]
-sha2-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }
+sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.10.0" }

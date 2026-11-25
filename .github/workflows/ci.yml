@@ -35,3 +35,33 @@ jobs:
 
       - name: Verify crates.io package dry-run
         run: cargo publish -p hypercomp-decoder --dry-run
+
+  # R3-4: compile the zkVM integration templates (also resolves & verifies the sha2 precompile
+  # [patch.crates-io] tags) so they can never silently rot.
+  sp1-guest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install SP1 toolchain
+        run: |
+          curl -L https://sp1up.succinct.xyz | bash
+          ~/.sp1/bin/sp1up
+          echo "$HOME/.sp1/bin" >> "$GITHUB_PATH"
+      - name: Build SP1 guest ELF
+        working-directory: zkvm/sp1-guest
+        run: cargo prove build
+
+  risc0-guest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install RISC Zero toolchain
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+          ~/.risc0/bin/rzup install
+      - name: Build RISC Zero guest ELF
+        working-directory: zkvm/risc0-guest
+        run: cargo risczero build
