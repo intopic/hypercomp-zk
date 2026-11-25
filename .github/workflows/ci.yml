@@ -14,8 +14,11 @@ jobs:
         with:
           targets: riscv32im-unknown-none-elf
 
-      - name: Run unit & adversarial tests (10,000 fuzz inputs)
+      - name: Run unit & adversarial tests (incl. PoC regression & fuzz suite)
         run: cargo test --workspace --all-features
+
+      - name: Run Clippy lints (zero warnings)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Check pure #![no_std] zero-dependency build (RV32IM)
         run: cargo check -p hypercomp-decoder --target riscv32im-unknown-none-elf --no-default-features
@@ -24,7 +27,8 @@ jobs:
         run: cargo check -p hypercomp-decoder --target riscv32im-unknown-none-elf --no-default-features --features zstd-nostd
 
       - name: Build bare-metal RV32IM zkVM guest ELF
-        run: cargo build --release --manifest-path zkvm/riscv-guest/Cargo.toml
+        working-directory: zkvm/riscv-guest
+        run: cargo build --release
 
       - name: Verify crates.io package dry-run
         run: cargo publish -p hypercomp-decoder --dry-run

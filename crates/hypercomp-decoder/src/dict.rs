@@ -116,7 +116,12 @@ pub fn dict_decode_fixed<const N: usize>(
             if num_runs > expected_count {
                 return Err(HyperCompError::LengthMismatch);
             }
-            let mut items = Vec::with_capacity(expected_count);
+            // Each run requires at least 2 bytes (1B idx + 1B run_len).
+            if buf.len().saturating_sub(*pos) < num_runs.saturating_mul(2) {
+                return Err(HyperCompError::UnexpectedEof);
+            }
+            // Never eagerly pre-allocate untrusted `expected_count` (prevents RLE OOM bombs).
+            let mut items = Vec::with_capacity(expected_count.min(4096));
             for _ in 0..num_runs {
                 let idx_u32 = decode_varint_u32(buf, pos)?;
                 let idx = usize::try_from(idx_u32).map_err(|_| HyperCompError::InvalidIndex(idx_u32))?;
@@ -135,6 +140,7 @@ pub fn dict_decode_fixed<const N: usize>(
                     return Err(HyperCompError::LengthMismatch);
                 }
                 let val = vocab[idx];
+                items.reserve(run_len);
                 for _ in 0..run_len {
                     items.push(val);
                 }
@@ -229,7 +235,7 @@ pub fn slot_decode_column(
     match mode {
         SLOT_MODE_DICT32 => dict_decode_fixed::<32>(buf, pos, expected_count, max_items),
         SLOT_MODE_BIMODAL_POLY => {
-            let bitmap_bytes = (expected_count + 7) / 8;
+            let bitmap_bytes = expected_count.div_ceil(8);
             if buf.len().saturating_sub(*pos) < bitmap_bytes {
                 return Err(HyperCompError::UnexpectedEof);
             }

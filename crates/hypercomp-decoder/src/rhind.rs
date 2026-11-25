@@ -36,7 +36,7 @@ pub fn left_aligned_len(val: &U256) -> Option<usize> {
     }
     let trailing = val.0.iter().rev().take_while(|&&b| b == 0).count();
     let len = 32 - trailing;
-    if len >= 1 && len <= 31 {
+    if (1..=31).contains(&len) {
         Some(len)
     } else {
         None
@@ -61,7 +61,7 @@ pub fn has_strictly_shorter_rhind(val: U256) -> Option<(u64, u8, u8)> {
     }
     let m_u64 = mantissa_u256.to_u64_exact()?;
     let m_len = mantissa_u256.minimal_be_len();
-    if m_len >= 1 && m_len <= 8 && (1 + m_len) < best_non_rhind_len {
+    if (1..=8).contains(&m_len) && (1 + m_len) < best_non_rhind_len {
         Some((m_u64, exp, m_len as u8))
     } else {
         None
@@ -121,6 +121,7 @@ fn decode_tagged_parts(tag: u8, exp: Option<u8>, payload: &[u8]) -> Result<U256,
             let mantissa = u64::from_be_bytes(m_bytes);
             // Maximal exponent canonicality: mantissa must not be divisible by 10.
             // Uses pure 32-bit arithmetic (2^32 ≡ 6 (mod 10)) to avoid `__umoddi3` on RV32IM.
+            #[allow(clippy::manual_is_multiple_of)]
             let m_div10 = ((mantissa as u32) & 1) == 0
                 && ((((mantissa as u32) % 5) + (((mantissa >> 32) as u32) % 5)) % 5) == 0;
             if m_div10 {
@@ -319,24 +320,45 @@ pub enum DeltaOp {
 }
 
 impl DeltaOp {
+    /// Validates that this `DeltaOp` satisfies all canonical wire invariants:
+    /// - `Add(d)` and `Sub(d)` MUST be non-zero.
+    /// - `XorShifted { shift, mask }` MUST have `shift < 32`, `mask != 0`, non-zero LSB byte
+    ///   (maximal right-shift), and `mask.minimal_be_slice().len() + shift <= 32`.
+    #[inline]
+    pub fn validate(self) -> Result<(), HyperCompError> {
+        match self {
+            Self::NoChange | Self::SetNew(_) => Ok(()),
+            Self::Add(d) | Self::Sub(d) => {
+                if d.is_zero() {
+                    return Err(HyperCompError::NonCanonicalEncoding);
+                }
+                Ok(())
+            }
+            Self::XorShifted { shift, mask } => {
+                if shift >= 32 || mask.is_zero() {
+                    return Err(HyperCompError::InvalidU256Length(shift));
+                }
+                let s = mask.minimal_be_slice();
+                if s[s.len() - 1] == 0 {
+                    return Err(HyperCompError::NonCanonicalEncoding);
+                }
+                if s.len() + (shift as usize) > 32 {
+                    return Err(HyperCompError::U256Overflow);
+                }
+                Ok(())
+            }
+        }
+    }
+
     /// Applies this delta operation to `old_val` with exact overflow/underflow checks.
     #[inline]
     pub fn apply(self, old_val: U256) -> Result<U256, HyperCompError> {
+        self.validate()?;
         match self {
             Self::NoChange => Ok(old_val),
             Self::SetNew(v) => Ok(v),
-            Self::Add(d) => {
-                if d.is_zero() {
-                    return Err(HyperCompError::NonCanonicalEncoding);
-                }
-                old_val.checked_add(d).ok_or(HyperCompError::U256Overflow)
-            }
-            Self::Sub(d) => {
-                if d.is_zero() {
-                    return Err(HyperCompError::NonCanonicalEncoding);
-                }
-                old_val.checked_sub(d).ok_or(HyperCompError::U256Overflow)
-            }
+            Self::Add(d) => old_val.checked_add(d).ok_or(HyperCompError::U256Overflow),
+            Self::Sub(d) => old_val.checked_sub(d).ok_or(HyperCompError::U256Overflow),
             Self::XorShifted { shift, mask } => old_val.apply_xor_shifted(shift, mask),
         }
     }
@@ -410,19 +432,9 @@ pub fn delta_decode_column(
                 xor_i += 1;
                 let mask = values[val_i];
                 val_i += 1;
-                if shift >= 32 || mask.is_zero() {
-                    return Err(HyperCompError::InvalidU256Length(shift));
-                }
-                if shift > 0 {
-                    let s = mask.minimal_be_slice();
-                    if s[s.len() - 1] == 0 {
-                        return Err(HyperCompError::NonCanonicalEncoding);
-                    }
-                    if s.len() + (shift as usize) > 32 {
-                        return Err(HyperCompError::U256Overflow);
-                    }
-                }
-                DeltaOp::XorShifted { shift, mask }
+                let op = DeltaOp::XorShifted { shift, mask };
+                op.validate()?;
+                op
             }
             other => return Err(HyperCompError::InvalidTag(other)),
         };

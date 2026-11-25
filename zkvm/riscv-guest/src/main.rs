@@ -27,8 +27,9 @@ use hypercomp_decoder::{
 const HEAP_START: usize = 0x8040_0000;
 const HEAP_END: usize = 0x8340_0000; // 48 MiB guest heap
 const INPUT_MAILBOX: usize = 0x8340_0000; // 11 MiB input buffer
+const INPUT_MAILBOX_SIZE: usize = OUTPUT_MAILBOX - INPUT_MAILBOX; // 11 MiB hard upper bound
 const OUTPUT_MAILBOX: usize = 0x83F0_0000; // output commitment & stats
-// Stack starts at 0x83FF_FFF0 (growing downward)
+// Stack starts at 0x83FF_FFF0 (growing downward toward OUTPUT_MAILBOX + 64 KiB)
 
 // Startup assembly: initialize stack pointer, zero .bss, jump to rust_main, then halt.
 global_asm!(
@@ -403,10 +404,34 @@ pub extern "C" fn rust_main() {
         let blob_len = read_in_u32(4) as usize;
         let dict_len = read_in_u32(8) as usize;
 
+        // L-1 safety: strictly validate untrusted mailbox lengths with checked 32-bit math
+        // BEFORE constructing slices via `from_raw_parts` (eliminates UB / overflow).
+        let blob_end = match 12usize.checked_add(blob_len) {
+            Some(e) if e <= INPUT_MAILBOX_SIZE => e,
+            _ => {
+                write_out(0, 0xBAD0_0001);
+                return;
+            }
+        };
+        let dict_offset = match blob_end.checked_add(3) {
+            Some(v) => v & !3,
+            None => {
+                write_out(0, 0xBAD0_0002);
+                return;
+            }
+        };
+        let dict_end = match dict_offset.checked_add(dict_len) {
+            Some(e) if e <= INPUT_MAILBOX_SIZE => e,
+            _ => {
+                write_out(0, 0xBAD0_0003);
+                return;
+            }
+        };
+        let _ = dict_end;
+
         let blob_ptr = (INPUT_MAILBOX + 12) as *const u8;
         let blob = core::slice::from_raw_parts(blob_ptr, blob_len);
 
-        let dict_offset = (12 + blob_len + 3) & !3;
         let dict = if dict_len > 0 {
             let dict_ptr = (INPUT_MAILBOX + dict_offset) as *const u8;
             Some(core::slice::from_raw_parts(dict_ptr, dict_len))
@@ -414,10 +439,7 @@ pub extern "C" fn rust_main() {
             None
         };
 
-        let limits = DecodeLimits {
-            max_items: 1_000_000,
-            max_decompressed_bytes: 16 * 1024 * 1024,
-        };
+        let limits = DecodeLimits::zkvm();
 
         let result: Result<(u32, u64), u32> = match mode {
             0 => unwrap_frame(blob, PayloadKind::StateUpdates, dict, limits)

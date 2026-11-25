@@ -1,11 +1,15 @@
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
+use sha2::{Digest, Sha256};
+
 use crate::dict::{dict_decode_fixed, slot_decode_column};
 use crate::error::HyperCompError;
+#[cfg(feature = "zstd-nostd")]
+use crate::header::parse_raw_fallback_tag;
 use crate::header::{
     compute_dict_id, is_raw_zstd_fallback, EntropyCodec, PayloadKind, WireHeader,
-    MAX_DECOMPRESSED_BYTES, MAX_DECODE_ITEMS,
+    MAX_DECOMPRESSED_BYTES, MAX_DECODE_ITEMS, MAX_OUTPUT_BYTES,
 };
 use crate::poly::alsamawal_poly_decode_exact;
 use crate::rhind::{delta_decode_column, rhind_decode_column, DeltaOp};
@@ -38,11 +42,15 @@ impl StateDiff {
     /// Decodes canonical raw uncompressed 116-byte `StateDiff` records.
     pub fn from_raw_bytes(raw: &[u8], limits: DecodeLimits) -> Result<Vec<Self>, HyperCompError> {
         const REC_LEN: usize = 116;
+        #[allow(clippy::manual_is_multiple_of)]
         if raw.len() % REC_LEN != 0 {
             return Err(HyperCompError::UnexpectedEof);
         }
         let n = raw.len() / REC_LEN;
         if u32::try_from(n).map_or(true, |v| v > limits.max_items) {
+            return Err(HyperCompError::LimitExceeded);
+        }
+        if raw.len() > limits.max_output_bytes {
             return Err(HyperCompError::LimitExceeded);
         }
         let mut out = Vec::with_capacity(n);
@@ -81,14 +89,20 @@ pub struct ContractDiff {
     pub storage_updates: Vec<StorageUpdate>,
 }
 
+type RawContractUpdates<const ADDR_LEN: usize> = ([u8; ADDR_LEN], Option<u64>, Vec<StorageUpdate>);
+type RawContractDeltas<const ADDR_LEN: usize> = ([u8; ADDR_LEN], Option<u64>, Vec<StorageDelta>);
+type ContractSkeleton<const ADDR_LEN: usize> = (Vec<[u8; ADDR_LEN]>, Vec<Option<u64>>, Vec<usize>, usize);
+
 fn decode_raw_updates_generic<const ADDR_LEN: usize>(
     raw: &[u8],
     limits: DecodeLimits,
-) -> Result<Vec<([u8; ADDR_LEN], Option<u64>, Vec<StorageUpdate>)>, HyperCompError> {
+) -> Result<Vec<RawContractUpdates<ADDR_LEN>>, HyperCompError> {
     let mut pos = 0usize;
     let mut out = Vec::new();
     let mut total_slots = 0u32;
     let mut total_contracts = 0u32;
+    let mut estimated_out_bytes = 0usize;
+    let mut prev_addr: Option<[u8; ADDR_LEN]> = None;
 
     while pos < raw.len() {
         total_contracts = total_contracts
@@ -103,6 +117,13 @@ fn decode_raw_updates_generic<const ADDR_LEN: usize>(
         let mut address = [0u8; ADDR_LEN];
         address.copy_from_slice(&raw[pos..pos + ADDR_LEN]);
         pos += ADDR_LEN;
+
+        if let Some(pa) = prev_addr {
+            if address <= pa {
+                return Err(HyperCompError::NonCanonicalEncoding);
+            }
+        }
+        prev_addr = Some(address);
 
         let has_nonce = raw[pos];
         pos += 1;
@@ -138,14 +159,28 @@ fn decode_raw_updates_generic<const ADDR_LEN: usize>(
         if raw.len().saturating_sub(pos) < need_bytes {
             return Err(HyperCompError::UnexpectedEof);
         }
+        estimated_out_bytes = estimated_out_bytes
+            .checked_add(ADDR_LEN + 16)
+            .and_then(|v| v.checked_add(need_bytes))
+            .ok_or(HyperCompError::LimitExceeded)?;
+        if estimated_out_bytes > limits.max_output_bytes {
+            return Err(HyperCompError::LimitExceeded);
+        }
 
         let mut storage_updates = Vec::with_capacity(cnt);
+        let mut prev_slot: Option<[u8; 32]> = None;
         for _ in 0..cnt {
             let mut slot = [0u8; 32];
             let mut val = [0u8; 32];
             slot.copy_from_slice(&raw[pos..pos + 32]);
             val.copy_from_slice(&raw[pos + 32..pos + 64]);
             pos += 64;
+            if let Some(ps) = prev_slot {
+                if slot <= ps {
+                    return Err(HyperCompError::NonCanonicalEncoding);
+                }
+            }
+            prev_slot = Some(slot);
             storage_updates.push(StorageUpdate {
                 slot,
                 new_val: U256(val),
@@ -178,10 +213,30 @@ fn decode_raw_u256_of_len(raw: &[u8], pos: &mut usize, len: usize) -> Result<U25
 
 fn encode_raw_deltas_generic<const ADDR_LEN: usize>(
     items: &[([u8; ADDR_LEN], Option<u64>, &[StorageDelta])],
-) -> Vec<u8> {
+) -> Result<Vec<u8>, HyperCompError> {
     let total_slots: usize = items.iter().map(|(_, _, d)| d.len()).sum();
     let mut raw = Vec::with_capacity(items.len() * (ADDR_LEN + 13) + total_slots * 44);
+    let mut prev_addr: Option<[u8; ADDR_LEN]> = None;
+
     for (address, nonce, deltas) in items {
+        if let Some(pa) = prev_addr {
+            if *address <= pa {
+                return Err(HyperCompError::NonCanonicalEncoding);
+            }
+        }
+        prev_addr = Some(*address);
+
+        let mut prev_slot: Option<[u8; 32]> = None;
+        for d in *deltas {
+            if let Some(ps) = prev_slot {
+                if d.slot <= ps {
+                    return Err(HyperCompError::NonCanonicalEncoding);
+                }
+            }
+            prev_slot = Some(d.slot);
+            d.op.validate()?;
+        }
+
         // Check whether pure fixed-32B SetNew layout (bit-identical to `ContractDiff::to_raw_bytes`,
         // ZERO overhead on 32B random hashes!) is at least as compact as packed `(op, len)` deltas.
         let all_set_new = deltas.iter().all(|d| matches!(d.op, DeltaOp::SetNew(_)));
@@ -211,7 +266,8 @@ fn encode_raw_deltas_generic<const ADDR_LEN: usize>(
             }
             None => raw.push(mode_bit),
         }
-        raw.extend_from_slice(&(deltas.len() as u32).to_be_bytes());
+        let cnt_u32 = u32::try_from(deltas.len()).map_err(|_| HyperCompError::LimitExceeded)?;
+        raw.extend_from_slice(&cnt_u32.to_be_bytes());
 
         if use_fixed32_setnew {
             for d in *deltas {
@@ -254,17 +310,19 @@ fn encode_raw_deltas_generic<const ADDR_LEN: usize>(
             }
         }
     }
-    raw
+    Ok(raw)
 }
 
 fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
     raw: &[u8],
     limits: DecodeLimits,
-) -> Result<Vec<([u8; ADDR_LEN], Option<u64>, Vec<StorageDelta>)>, HyperCompError> {
+) -> Result<Vec<RawContractDeltas<ADDR_LEN>>, HyperCompError> {
     let mut pos = 0usize;
     let mut out = Vec::new();
     let mut total_slots = 0u32;
     let mut total_contracts = 0u32;
+    let mut estimated_out_bytes = 0usize;
+    let mut prev_addr: Option<[u8; ADDR_LEN]> = None;
 
     while pos < raw.len() {
         total_contracts = total_contracts
@@ -279,6 +337,13 @@ fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
         let mut address = [0u8; ADDR_LEN];
         address.copy_from_slice(&raw[pos..pos + ADDR_LEN]);
         pos += ADDR_LEN;
+
+        if let Some(pa) = prev_addr {
+            if address <= pa {
+                return Err(HyperCompError::NonCanonicalEncoding);
+            }
+        }
+        prev_addr = Some(address);
 
         let flags = raw[pos];
         pos += 1;
@@ -314,7 +379,18 @@ fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
             return Err(HyperCompError::LimitExceeded);
         }
         let cnt = usize::try_from(cnt_u32).map_err(|_| HyperCompError::LimitExceeded)?;
+        estimated_out_bytes = estimated_out_bytes
+            .checked_add(ADDR_LEN + 16)
+            .and_then(|v| {
+                cnt.checked_mul(68)
+                    .and_then(|slot_b| v.checked_add(slot_b))
+            })
+            .ok_or(HyperCompError::LimitExceeded)?;
+        if estimated_out_bytes > limits.max_output_bytes {
+            return Err(HyperCompError::LimitExceeded);
+        }
 
+        let mut prev_slot: Option<[u8; 32]> = None;
         if !is_compact {
             let need_bytes = cnt.checked_mul(64).ok_or(HyperCompError::LimitExceeded)?;
             if raw.len().saturating_sub(pos) < need_bytes {
@@ -327,6 +403,12 @@ fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
                 slot.copy_from_slice(&raw[pos..pos + 32]);
                 val.copy_from_slice(&raw[pos + 32..pos + 64]);
                 pos += 64;
+                if let Some(ps) = prev_slot {
+                    if slot <= ps {
+                        return Err(HyperCompError::NonCanonicalEncoding);
+                    }
+                }
+                prev_slot = Some(slot);
                 storage_deltas.push(StorageDelta {
                     slot,
                     op: DeltaOp::SetNew(U256(val)),
@@ -349,6 +431,13 @@ fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
             let mut slot = [0u8; 32];
             slot.copy_from_slice(&raw[pos..pos + 32]);
             pos += 32;
+            if let Some(ps) = prev_slot {
+                if slot <= ps {
+                    return Err(HyperCompError::NonCanonicalEncoding);
+                }
+            }
+            prev_slot = Some(slot);
+
             let tag = raw[pos];
             pos += 1;
             let op = match tag {
@@ -373,22 +462,11 @@ fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
                     let shift = raw[pos];
                     pos += 1;
                     let mask = decode_raw_u256_of_len(raw, &mut pos, len)?;
-                    if shift >= 32 || mask.is_zero() {
-                        return Err(HyperCompError::InvalidU256Length(shift));
-                    }
-                    if shift > 0 {
-                        let s = mask.minimal_be_slice();
-                        if s[s.len() - 1] == 0 {
-                            return Err(HyperCompError::NonCanonicalEncoding);
-                        }
-                        if s.len() + (shift as usize) > 32 {
-                            return Err(HyperCompError::U256Overflow);
-                        }
-                    }
                     DeltaOp::XorShifted { shift, mask }
                 }
                 other => return Err(HyperCompError::InvalidTag(other)),
             };
+            op.validate()?;
             storage_deltas.push(StorageDelta { slot, op });
         }
         out.push((address, nonce, storage_deltas));
@@ -451,8 +529,8 @@ pub struct ContractDelta {
 
 impl ContractDelta {
     /// Serializes contract-grouped state deltas into compact canonical raw bytes
-    /// (used for zero-overhead Raw Zstd fallback on tiny or incompressible batches).
-    pub fn to_raw_bytes(contracts: &[Self]) -> Vec<u8> {
+    /// (validating every `DeltaOp` and strict ascending `(address, slot)` uniqueness).
+    pub fn to_raw_bytes(contracts: &[Self]) -> Result<Vec<u8>, HyperCompError> {
         let items: Vec<([u8; 20], Option<u64>, &[StorageDelta])> = contracts
             .iter()
             .map(|c| (c.address, c.nonce, c.storage_deltas.as_slice()))
@@ -530,8 +608,8 @@ pub struct StarknetContractDelta {
 
 impl StarknetContractDelta {
     /// Serializes Starknet state deltas into compact canonical raw bytes
-    /// (used for zero-overhead Raw Zstd fallback on tiny or incompressible batches).
-    pub fn to_raw_bytes(contracts: &[Self]) -> Vec<u8> {
+    /// (validating every `DeltaOp` and strict ascending `(address, slot)` uniqueness).
+    pub fn to_raw_bytes(contracts: &[Self]) -> Result<Vec<u8>, HyperCompError> {
         let items: Vec<([u8; 32], Option<u64>, &[StorageDelta])> = contracts
             .iter()
             .map(|c| (c.address, c.nonce, c.storage_deltas.as_slice()))
@@ -558,6 +636,7 @@ impl StarknetContractDelta {
 pub struct DecodeLimits {
     pub max_items: u32,
     pub max_decompressed_bytes: usize,
+    pub max_output_bytes: usize,
 }
 
 impl Default for DecodeLimits {
@@ -565,8 +644,31 @@ impl Default for DecodeLimits {
         Self {
             max_items: MAX_DECODE_ITEMS,
             max_decompressed_bytes: MAX_DECOMPRESSED_BYTES,
+            max_output_bytes: MAX_OUTPUT_BYTES,
         }
     }
+}
+
+impl DecodeLimits {
+    /// Conservative memory & cycle limits tailored for 32-bit RISC-V zkVM guests (SP1 / RISC Zero).
+    pub const fn zkvm() -> Self {
+        Self {
+            max_items: 1_000_000,
+            max_decompressed_bytes: 16 * 1024 * 1024,
+            max_output_bytes: 16 * 1024 * 1024,
+        }
+    }
+}
+
+/// Validates that contract addresses are strictly ascending (no duplicates / ambiguous ordering).
+#[inline]
+fn validate_strictly_ascending<const N: usize>(keys: &[[u8; N]]) -> Result<(), HyperCompError> {
+    for w in keys.windows(2) {
+        if w[1] <= w[0] {
+            return Err(HyperCompError::NonCanonicalEncoding);
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -582,10 +684,18 @@ pub fn decode_state_transitions_raw(
 ) -> Result<Vec<StateDiff>, HyperCompError> {
     let mut pos = 0usize;
     let n = decode_count(pre, &mut pos, limits.max_items)?;
+    // H-1 RLE OOM-bomb guard: every transition requires at least 1 op-kind byte in `delta_decode_column`.
+    if n > pre.len().saturating_sub(pos) {
+        return Err(HyperCompError::UnexpectedEof);
+    }
+    let out_bytes = n.checked_mul(116).ok_or(HyperCompError::LimitExceeded)?;
+    if out_bytes > limits.max_output_bytes {
+        return Err(HyperCompError::LimitExceeded);
+    }
     let addrs = dict_decode_fixed::<20>(pre, &mut pos, n, limits.max_items)?;
     let slots = slot_decode_column(pre, &mut pos, n, limits.max_items)?;
 
-    let bitmap_bytes = (n + 7) / 8;
+    let bitmap_bytes = n.div_ceil(8);
     if pre.len().saturating_sub(pos) < bitmap_bytes {
         return Err(HyperCompError::UnexpectedEof);
     }
@@ -647,7 +757,7 @@ fn decode_contract_skeleton<const ADDR_LEN: usize>(
     pre: &[u8],
     pos: &mut usize,
     limits: DecodeLimits,
-) -> Result<(Vec<[u8; ADDR_LEN]>, Vec<Option<u64>>, Vec<usize>, usize), HyperCompError> {
+) -> Result<ContractSkeleton<ADDR_LEN>, HyperCompError> {
     let num_contracts = decode_count(pre, pos, limits.max_items)?;
     let addr_bytes = num_contracts
         .checked_mul(ADDR_LEN)
@@ -665,7 +775,7 @@ fn decode_contract_skeleton<const ADDR_LEN: usize>(
     }
 
     // Nonce presence bitmap
-    let bitmap_bytes = (num_contracts + 7) / 8;
+    let bitmap_bytes = num_contracts.div_ceil(8);
     if pre.len().saturating_sub(*pos) < bitmap_bytes {
         return Err(HyperCompError::UnexpectedEof);
     }
@@ -714,6 +824,24 @@ fn decode_contract_skeleton<const ADDR_LEN: usize>(
         counts.push(c);
     }
 
+    // H-1 RLE OOM-bomb guard: every slot requires at least 1 byte in the value/delta column,
+    // and total decoded output must stay within `limits.max_output_bytes`.
+    if total_slots > pre.len().saturating_sub(*pos) {
+        return Err(HyperCompError::UnexpectedEof);
+    }
+    let est_out = num_contracts
+        .checked_mul(ADDR_LEN + 16)
+        .and_then(|c| {
+            total_slots
+                .checked_mul(68)
+                .and_then(|s| c.checked_add(s))
+        })
+        .ok_or(HyperCompError::LimitExceeded)?;
+    if est_out > limits.max_output_bytes {
+        return Err(HyperCompError::LimitExceeded);
+    }
+    validate_strictly_ascending(&addresses)?;
+
     Ok((addresses, nonces, counts, total_slots))
 }
 
@@ -736,6 +864,7 @@ pub fn decode_state_updates_raw(
     let mut idx = 0usize;
     for c_i in 0..addresses.len() {
         let cnt = counts[c_i];
+        validate_strictly_ascending(&slots[idx..idx + cnt])?;
         let mut updates = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             updates.push(StorageUpdate {
@@ -772,6 +901,7 @@ pub fn decode_state_deltas_raw(
     let mut idx = 0usize;
     for c_i in 0..addresses.len() {
         let cnt = counts[c_i];
+        validate_strictly_ascending(&slots[idx..idx + cnt])?;
         let mut deltas = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             deltas.push(StorageDelta {
@@ -795,12 +925,12 @@ fn decode_starknet_skeleton(
     pre: &[u8],
     pos: &mut usize,
     limits: DecodeLimits,
-) -> Result<(Vec<[u8; 32]>, Vec<Option<u64>>, Vec<usize>, usize), HyperCompError> {
+) -> Result<ContractSkeleton<32>, HyperCompError> {
     let num_contracts = decode_count(pre, pos, limits.max_items)?;
     let addr_u256s = rhind_decode_column(pre, pos, num_contracts)?;
     let addresses: Vec<[u8; 32]> = addr_u256s.into_iter().map(|u| u.0).collect();
 
-    let bitmap_bytes = (num_contracts + 7) / 8;
+    let bitmap_bytes = num_contracts.div_ceil(8);
     if pre.len().saturating_sub(*pos) < bitmap_bytes {
         return Err(HyperCompError::UnexpectedEof);
     }
@@ -847,6 +977,23 @@ fn decode_starknet_skeleton(
         counts.push(c);
     }
 
+    // H-1 RLE OOM-bomb guard & strict ascending contract address check
+    if total_slots > pre.len().saturating_sub(*pos) {
+        return Err(HyperCompError::UnexpectedEof);
+    }
+    let est_out = num_contracts
+        .checked_mul(48)
+        .and_then(|c| {
+            total_slots
+                .checked_mul(68)
+                .and_then(|s| c.checked_add(s))
+        })
+        .ok_or(HyperCompError::LimitExceeded)?;
+    if est_out > limits.max_output_bytes {
+        return Err(HyperCompError::LimitExceeded);
+    }
+    validate_strictly_ascending(&addresses)?;
+
     Ok((addresses, nonces, counts, total_slots))
 }
 
@@ -869,6 +1016,7 @@ pub fn decode_starknet_updates_raw(
     let mut idx = 0usize;
     for c_i in 0..addresses.len() {
         let cnt = counts[c_i];
+        validate_strictly_ascending(&slots[idx..idx + cnt])?;
         let mut updates = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             updates.push(StorageUpdate {
@@ -905,6 +1053,7 @@ pub fn decode_starknet_deltas_raw(
     let mut idx = 0usize;
     for c_i in 0..addresses.len() {
         let cnt = counts[c_i];
+        validate_strictly_ascending(&slots[idx..idx + cnt])?;
         let mut deltas = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             deltas.push(StorageDelta {
@@ -987,11 +1136,12 @@ fn decompress_zstd_nostd(
         out.extend_from_slice(&chunk);
     }
 
-    // Verify optional Zstd content checksum when present.
-    if let Some(expected_cksum) = decoder.get_checksum_from_data() {
-        if decoder.get_calculated_checksum() != Some(expected_cksum) {
-            return Err(HyperCompError::EntropyDecodeFailed);
-        }
+    // Verify mandatory Zstd XXH64 content checksum on all HyperComp Zstd frames (H-3 / M-2).
+    let expected_cksum = decoder
+        .get_checksum_from_data()
+        .ok_or(HyperCompError::EntropyDecodeFailed)?;
+    if decoder.get_calculated_checksum() != Some(expected_cksum) {
+        return Err(HyperCompError::EntropyDecodeFailed);
     }
 
     // Reject unconsumed trailing bytes after the Zstd frame.
@@ -1065,15 +1215,21 @@ pub fn unwrap_frame<'a>(
 
 fn decompress_raw_zstd_fallback(
     blob: &[u8],
+    expected_kind: PayloadKind,
     limits: DecodeLimits,
 ) -> Result<Vec<u8>, HyperCompError> {
     #[cfg(feature = "zstd-nostd")]
     {
-        decompress_zstd_nostd(blob, None, limits.max_decompressed_bytes)
+        let raw = decompress_zstd_nostd(blob, None, limits.max_decompressed_bytes)?;
+        if raw.is_empty() {
+            return Err(HyperCompError::UnexpectedEof);
+        }
+        parse_raw_fallback_tag(raw[0], expected_kind)?;
+        Ok(raw[1..].to_vec())
     }
     #[cfg(not(feature = "zstd-nostd"))]
     {
-        let _ = (blob, limits);
+        let _ = (blob, expected_kind, limits);
         Err(HyperCompError::UnsupportedEntropyCodec(
             EntropyCodec::Zstd as u8,
         ))
@@ -1081,7 +1237,7 @@ fn decompress_raw_zstd_fallback(
 }
 
 /// Decompresses a full framed `StateTransitions` blob (`Vec<StateDiff>`).
-/// Transparently decodes both HyperComp `"AS"` frames and zero-overhead Raw Zstd fallback frames.
+/// Transparently decodes both HyperComp `"AS"` frames and domain-separated Raw Zstd fallback frames.
 pub fn decompress_state_transitions(
     blob: &[u8],
     dict: Option<&[u8]>,
@@ -1096,7 +1252,7 @@ pub fn decompress_state_transitions_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<StateDiff>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, limits)?;
+        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StateTransitions, limits)?;
         return StateDiff::from_raw_bytes(&raw, limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StateTransitions, dict, limits)?;
@@ -1104,7 +1260,7 @@ pub fn decompress_state_transitions_with_limits(
 }
 
 /// Decompresses a full framed `StateUpdates` blob (`Vec<ContractDiff>`).
-/// Transparently decodes both HyperComp `"AS"` frames and zero-overhead Raw Zstd fallback frames.
+/// Transparently decodes both HyperComp `"AS"` frames and domain-separated Raw Zstd fallback frames.
 pub fn decompress_state_updates(
     blob: &[u8],
     dict: Option<&[u8]>,
@@ -1119,7 +1275,7 @@ pub fn decompress_state_updates_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<ContractDiff>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, limits)?;
+        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StateUpdates, limits)?;
         return ContractDiff::from_raw_bytes(&raw, limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StateUpdates, dict, limits)?;
@@ -1127,7 +1283,7 @@ pub fn decompress_state_updates_with_limits(
 }
 
 /// Decompresses a full framed `StateDeltas` blob (`Vec<ContractDelta>`).
-/// Transparently decodes both HyperComp `"AS"` frames and zero-overhead Raw Zstd fallback frames.
+/// Transparently decodes both HyperComp `"AS"` frames and domain-separated Raw Zstd fallback frames.
 pub fn decompress_state_deltas(
     blob: &[u8],
     dict: Option<&[u8]>,
@@ -1142,7 +1298,7 @@ pub fn decompress_state_deltas_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<ContractDelta>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, limits)?;
+        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StateDeltas, limits)?;
         return ContractDelta::from_raw_bytes(&raw, limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StateDeltas, dict, limits)?;
@@ -1154,9 +1310,17 @@ pub fn decompress_starknet_updates(
     blob: &[u8],
     dict: Option<&[u8]>,
 ) -> Result<Vec<StarknetContractDiff>, HyperCompError> {
-    let limits = DecodeLimits::default();
+    decompress_starknet_updates_with_limits(blob, dict, DecodeLimits::default())
+}
+
+/// Decompresses a full framed `StarknetUpdates` blob with custom safety limits.
+pub fn decompress_starknet_updates_with_limits(
+    blob: &[u8],
+    dict: Option<&[u8]>,
+    limits: DecodeLimits,
+) -> Result<Vec<StarknetContractDiff>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, limits)?;
+        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StarknetUpdates, limits)?;
         return StarknetContractDiff::from_raw_bytes(&raw, limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StarknetUpdates, dict, limits)?;
@@ -1168,11 +1332,96 @@ pub fn decompress_starknet_deltas(
     blob: &[u8],
     dict: Option<&[u8]>,
 ) -> Result<Vec<StarknetContractDelta>, HyperCompError> {
-    let limits = DecodeLimits::default();
+    decompress_starknet_deltas_with_limits(blob, dict, DecodeLimits::default())
+}
+
+/// Decompresses a full framed `StarknetDeltas` blob with custom safety limits.
+pub fn decompress_starknet_deltas_with_limits(
+    blob: &[u8],
+    dict: Option<&[u8]>,
+    limits: DecodeLimits,
+) -> Result<Vec<StarknetContractDelta>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, limits)?;
+        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StarknetDeltas, limits)?;
         return StarknetContractDelta::from_raw_bytes(&raw, limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StarknetDeltas, dict, limits)?;
     decode_starknet_deltas_raw(&pre, limits)
+}
+
+// ---------------------------------------------------------------------------
+// CRYPTOGRAPHIC SHA-256 COMMITMENTS FOR zkVM GUEST JOURNALS (C-2)
+// ---------------------------------------------------------------------------
+
+/// Computes a collision-resistant, domain-separated, length-prefixed SHA-256 commitment
+/// covering EVERY field of `Vec<ContractDelta>` (contract count, addresses, nonces, slot counts,
+/// slots, `DeltaOp` tags, full 32B operand values, and `XorShifted` shifts/masks).
+pub fn commit_state_deltas_sha256(contracts: &[ContractDelta]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(b"HYPERCOMP-DELTAS-COMMIT-V2:");
+    h.update((contracts.len() as u64).to_be_bytes());
+    for c in contracts {
+        h.update(c.address);
+        match c.nonce {
+            Some(n) => {
+                h.update([1u8]);
+                h.update(n.to_be_bytes());
+            }
+            None => h.update([0u8]),
+        }
+        h.update((c.storage_deltas.len() as u64).to_be_bytes());
+        for d in &c.storage_deltas {
+            h.update(d.slot);
+            match d.op {
+                DeltaOp::NoChange => h.update([0u8]),
+                DeltaOp::SetNew(v) => {
+                    h.update([1u8]);
+                    h.update(v.0);
+                }
+                DeltaOp::Add(v) => {
+                    h.update([2u8]);
+                    h.update(v.0);
+                }
+                DeltaOp::Sub(v) => {
+                    h.update([3u8]);
+                    h.update(v.0);
+                }
+                DeltaOp::XorShifted { shift, mask } => {
+                    h.update([4u8, shift]);
+                    h.update(mask.0);
+                }
+            }
+        }
+    }
+    let digest = h.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&digest);
+    out
+}
+
+/// Computes a collision-resistant, domain-separated, length-prefixed SHA-256 commitment
+/// covering EVERY field of `Vec<ContractDiff>`.
+pub fn commit_state_updates_sha256(contracts: &[ContractDiff]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(b"HYPERCOMP-UPDATES-COMMIT-V2:");
+    h.update((contracts.len() as u64).to_be_bytes());
+    for c in contracts {
+        h.update(c.address);
+        match c.nonce {
+            Some(n) => {
+                h.update([1u8]);
+                h.update(n.to_be_bytes());
+            }
+            None => h.update([0u8]),
+        }
+        h.update((c.storage_updates.len() as u64).to_be_bytes());
+        for u in &c.storage_updates {
+            h.update(u.slot);
+            h.update(u.new_val.0);
+        }
+    }
+    let digest = h.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&digest);
+    out
 }

@@ -9,10 +9,13 @@ use hypercomp_decoder::rhind::{
     TAG_MAX, TAG_RAW_BASE, TAG_RHIND_BASE, TAG_SMALL_BASE, TAG_ZERO,
 };
 use hypercomp_decoder::{
-    alsamawal_poly_decode, decode_state_deltas_raw, decode_state_transitions_raw,
-    decode_state_updates_raw, decode_varint_u128, decode_varint_u32, decode_varint_u64,
-    decompress_state_deltas, decompress_state_transitions, decompress_state_updates,
-    is_raw_zstd_fallback, rhind_decode_u256, ContractDelta, ContractDiff, DecodeLimits, DeltaOp,
+    alsamawal_poly_decode, commit_state_deltas_sha256, compute_dict_id, decode_state_deltas_raw,
+    decode_state_transitions_raw, decode_state_updates_raw, decode_varint_u128, decode_varint_u32,
+    decode_varint_u64, decompress_starknet_deltas_with_limits,
+    decompress_starknet_updates_with_limits, decompress_state_deltas_with_limits,
+    decompress_state_transitions, decompress_state_transitions_with_limits,
+    decompress_state_updates_with_limits, is_raw_zstd_fallback, parse_raw_fallback_tag,
+    raw_fallback_tag, rhind_decode_u256, ContractDelta, ContractDiff, DecodeLimits, DeltaOp,
     HyperCompError, PayloadKind, StateDiff, StorageDelta, StorageUpdate, WireHeader,
     FORMAT_VERSION, MAGIC, POW10, U256, ZSTD_MAGIC,
 };
@@ -254,6 +257,7 @@ fn test_adversarial_zero_panic_fuzz_10000_random_blobs() {
     let tight_limits = DecodeLimits {
         max_items: 4096,
         max_decompressed_bytes: 128 * 1024,
+        max_output_bytes: 256 * 1024,
     };
 
     for case in 0..10_000usize {
@@ -262,12 +266,12 @@ fn test_adversarial_zero_panic_fuzz_10000_random_blobs() {
         for b in &mut buf {
             *b = (next_u64(&mut state) & 0xFF) as u8;
         }
-        // Half the time inject a valid header prefix (or ZSTD_MAGIC) to stress deeper decoder paths!
+        // Inject valid header prefixes across ALL 5 PayloadKinds (0..=4) and ZSTD_MAGIC (fixes L-3).
         if len >= 4 && (case % 3 == 0) {
             buf[0] = MAGIC[0];
             buf[1] = MAGIC[1];
             buf[2] = FORMAT_VERSION;
-            buf[3] = (case % 3) as u8; // EntropyCodec::None with kinds 0, 1, 2
+            buf[3] = ((case / 3) % 5) as u8; // EntropyCodec::None with kinds 0..=4
         } else if len >= 4 && (case % 3 == 1) {
             buf[0..4].copy_from_slice(&ZSTD_MAGIC);
         }
@@ -279,9 +283,11 @@ fn test_adversarial_zero_panic_fuzz_10000_random_blobs() {
         let _ = StateDiff::from_raw_bytes(&buf, tight_limits);
         let _ = ContractDiff::from_raw_bytes(&buf, tight_limits);
         let _ = ContractDelta::from_raw_bytes(&buf, tight_limits);
-        let _ = decompress_state_transitions(&buf, None);
-        let _ = decompress_state_updates(&buf, None);
-        let _ = decompress_state_deltas(&buf, None);
+        let _ = decompress_state_transitions_with_limits(&buf, None, tight_limits);
+        let _ = decompress_state_updates_with_limits(&buf, None, tight_limits);
+        let _ = decompress_state_deltas_with_limits(&buf, None, tight_limits);
+        let _ = decompress_starknet_updates_with_limits(&buf, None, tight_limits);
+        let _ = decompress_starknet_deltas_with_limits(&buf, None, tight_limits);
         let _ = rhind_decode_u256(&buf, &mut 0);
         let _ = alsamawal_poly_decode(&buf, &mut 0, 4096);
     }
@@ -336,7 +342,7 @@ fn test_raw_fallback_canonicality_and_bounds() {
             },
         ],
     }];
-    let raw_d = ContractDelta::to_raw_bytes(&del);
+    let raw_d = ContractDelta::to_raw_bytes(&del).unwrap();
     assert_eq!(
         ContractDelta::from_raw_bytes(&raw_d, DecodeLimits::default()).unwrap(),
         del
@@ -360,7 +366,7 @@ fn test_raw_fallback_canonicality_and_bounds() {
             op: DeltaOp::SetNew(hash_val),
         }],
     }];
-    let raw_hash_del = ContractDelta::to_raw_bytes(&hash_del);
+    let raw_hash_del = ContractDelta::to_raw_bytes(&hash_del).unwrap();
     assert_eq!(raw_hash_del, ContractDiff::to_raw_bytes(&hash_upd));
     assert_eq!(
         ContractDelta::from_raw_bytes(&raw_hash_del, DecodeLimits::default()).unwrap(),
@@ -404,9 +410,171 @@ fn test_raw_fallback_canonicality_and_bounds() {
     let tight = DecodeLimits {
         max_items: 2,
         max_decompressed_bytes: 1024,
+        max_output_bytes: 1024,
     };
     assert_eq!(
         ContractDelta::from_raw_bytes(&raw_d, tight),
         Err(HyperCompError::LimitExceeded)
+    );
+}
+
+#[test]
+fn test_audit_poc_regressions_h1_h2_h3_h4_m2_l2_c2() {
+    // --- PoC-2 (H-1): 71-byte DICT_MODE_RLE OOM bomb must be rejected IMMEDIATELY without allocating! ---
+    // Craft StateDeltas pre-entropy claiming 1 contract, 1_000_000 slots, RLE 1 run of 1_000_000.
+    let mut rle_bomb = Vec::new();
+    rle_bomb.push(1); // num_contracts = 1
+    rle_bomb.extend_from_slice(&[0xAA; 20]); // address
+    rle_bomb.push(0); // nonce bitmap = 0
+    // slot count = 1_000_000 (varint: 0xC0, 0x84, 0x3D)
+    rle_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]);
+    rle_bomb.push(0); // SLOT_MODE_DICT32
+    rle_bomb.push(DICT_MODE_RLE);
+    rle_bomb.push(1); // vlen = 1
+    rle_bomb.extend_from_slice(&[0xBB; 32]); // 1 vocab entry
+    rle_bomb.push(1); // num_runs = 1
+    rle_bomb.push(0); // idx = 0
+    rle_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]); // run_len = 1_000_000
+    assert_eq!(
+        decode_state_deltas_raw(&rle_bomb, DecodeLimits::default()),
+        Err(HyperCompError::UnexpectedEof)
+    );
+    assert_eq!(
+        decode_state_updates_raw(&rle_bomb, DecodeLimits::zkvm()),
+        Err(HyperCompError::UnexpectedEof)
+    );
+
+    // Same RLE bomb for StateTransitions (74-byte bomb!)
+    let mut trans_bomb = Vec::new();
+    trans_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]); // n = 1_000_000
+    trans_bomb.push(DICT_MODE_RLE);
+    trans_bomb.push(1); // vlen = 1
+    trans_bomb.extend_from_slice(&[0xAA; 20]);
+    trans_bomb.push(1);
+    trans_bomb.push(0);
+    trans_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]);
+    assert_eq!(
+        decode_state_transitions_raw(&trans_bomb, DecodeLimits::zkvm()),
+        Err(HyperCompError::UnexpectedEof)
+    );
+
+    // --- PoC-4 (H-2): XorShifted { shift: 0, mask: 0xAB00 } must be rejected as non-canonical ---
+    let non_canon_xor = DeltaOp::XorShifted {
+        shift: 0,
+        mask: U256::from_u64(0xAB00),
+    };
+    assert_eq!(non_canon_xor.validate(), Err(HyperCompError::NonCanonicalEncoding));
+    assert_eq!(
+        non_canon_xor.apply(U256::ZERO),
+        Err(HyperCompError::NonCanonicalEncoding)
+    );
+
+    // --- PoC-5 (H-4): Add(0), Sub(0), XorShifted{mask:0} must NEVER silently corrupt to_raw_bytes ---
+    for bad_op in [
+        DeltaOp::Add(U256::ZERO),
+        DeltaOp::Sub(U256::ZERO),
+        DeltaOp::XorShifted {
+            shift: 0,
+            mask: U256::ZERO,
+        },
+        DeltaOp::XorShifted {
+            shift: 32,
+            mask: U256::from_u64(1),
+        },
+    ] {
+        assert!(bad_op.validate().is_err());
+        let bad_batch = vec![ContractDelta {
+            address: [0x01; 20],
+            nonce: None,
+            storage_deltas: vec![StorageDelta {
+                slot: [0x01; 32],
+                op: bad_op,
+            }],
+        }];
+        assert!(ContractDelta::to_raw_bytes(&bad_batch).is_err());
+    }
+
+    // --- PoC-6 (H-3): dict_id is full 32-byte SHA-256 ---
+    let d1 = compute_dict_id(b"dictionary-alpha");
+    let d2 = compute_dict_id(b"dictionary-beta");
+    assert_eq!(d1.len(), 32);
+    assert_ne!(d1, d2);
+
+    // --- M-2: Raw Zstd fallback domain tag enforces version & payload kind ---
+    let tag_u = raw_fallback_tag(PayloadKind::StateUpdates);
+    assert_eq!(parse_raw_fallback_tag(tag_u, PayloadKind::StateUpdates), Ok(()));
+    assert_eq!(
+        parse_raw_fallback_tag(tag_u, PayloadKind::StateDeltas),
+        Err(HyperCompError::PayloadKindMismatch {
+            expected: PayloadKind::StateDeltas as u8,
+            found: PayloadKind::StateUpdates as u8,
+        })
+    );
+    assert_eq!(
+        parse_raw_fallback_tag(0x91, PayloadKind::StateUpdates),
+        Err(HyperCompError::UnsupportedVersion(9))
+    );
+
+    // --- L-2: Unsorted or duplicate (address, slot) rejected ---
+    let dup_contracts = vec![
+        ContractDiff {
+            address: [0x22; 20],
+            nonce: None,
+            storage_updates: vec![],
+        },
+        ContractDiff {
+            address: [0x11; 20], // out of order!
+            nonce: None,
+            storage_updates: vec![],
+        },
+    ];
+    let raw_dup_c = ContractDiff::to_raw_bytes(&dup_contracts);
+    assert_eq!(
+        ContractDiff::from_raw_bytes(&raw_dup_c, DecodeLimits::default()),
+        Err(HyperCompError::NonCanonicalEncoding)
+    );
+
+    let dup_slots = vec![ContractDiff {
+        address: [0x11; 20],
+        nonce: None,
+        storage_updates: vec![
+            StorageUpdate {
+                slot: [0x05; 32],
+                new_val: U256::from_u64(1),
+            },
+            StorageUpdate {
+                slot: [0x05; 32], // duplicate slot!
+                new_val: U256::from_u64(2),
+            },
+        ],
+    }];
+    let raw_dup_s = ContractDiff::to_raw_bytes(&dup_slots);
+    assert_eq!(
+        ContractDiff::from_raw_bytes(&raw_dup_s, DecodeLimits::default()),
+        Err(HyperCompError::NonCanonicalEncoding)
+    );
+
+    // --- C-2: SHA-256 zkVM commitment binds EVERY field (value, nonce, shift/mask) ---
+    let base = vec![ContractDelta {
+        address: [0x11; 20],
+        nonce: Some(10),
+        storage_deltas: vec![StorageDelta {
+            slot: [0x01; 32],
+            op: DeltaOp::Add(U256::from_u64(100)),
+        }],
+    }];
+    let mut diff_val = base.clone();
+    diff_val[0].storage_deltas[0].op = DeltaOp::Add(U256::from_u64(101));
+    let mut diff_nonce = base.clone();
+    diff_nonce[0].nonce = Some(11);
+    assert_ne!(
+        commit_state_deltas_sha256(&base),
+        commit_state_deltas_sha256(&diff_val),
+        "SHA-256 commitment MUST bind DeltaOp values!"
+    );
+    assert_ne!(
+        commit_state_deltas_sha256(&base),
+        commit_state_deltas_sha256(&diff_nonce),
+        "SHA-256 commitment MUST bind contract nonces!"
     );
 }

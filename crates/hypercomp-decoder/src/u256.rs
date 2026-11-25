@@ -161,6 +161,7 @@ impl U256 {
 
     /// Bitwise XOR of two 256-bit words.
     #[inline]
+    #[allow(clippy::should_implement_trait)]
     pub fn bitxor(self, rhs: Self) -> Self {
         let a = self.to_limbs();
         let b = rhs.to_limbs();
@@ -179,9 +180,9 @@ impl U256 {
             return Err(HyperCompError::NonCanonicalEncoding);
         }
         let shift = shift_bytes as usize;
-        // Canonicality: if shift > 0, the least-significant byte of mask MUST be non-zero
-        // (otherwise shift wasn't maximal).
-        if shift > 0 && m_slice[m_slice.len() - 1] == 0 {
+        // Canonicality: the least-significant byte of mask MUST ALWAYS be non-zero
+        // (even for shift == 0, `{shift: 0, mask: 0xAB00}` is non-canonical vs `{shift: 1, mask: 0xAB}`).
+        if m_slice[m_slice.len() - 1] == 0 {
             return Err(HyperCompError::NonCanonicalEncoding);
         }
         if m_slice.len() + shift > 32 {
@@ -281,7 +282,9 @@ impl U256 {
         for &b in &self.0 {
             sum += b as u32;
         }
-        (sum % 5) == 0
+        #[allow(clippy::manual_is_multiple_of)]
+        let div5 = (sum % 5) == 0;
+        div5
     }
 
     /// Extracts the maximal decimal power `exp` such that `self = mantissa * 10^exp`

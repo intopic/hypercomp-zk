@@ -35,12 +35,20 @@ pub enum HyperCompError {
     LengthMismatch,
     /// Decoded count or decompressed size exceeded configured safety limit.
     LimitExceeded,
-    /// Blob requires a pre-shared Zstd dictionary ID that was not provided.
-    MissingDictionary(u32),
-    /// Provided Zstd dictionary ID does not match the header's dictionary ID.
-    DictionaryIdMismatch { expected: u32, found: u32 },
-    /// Underlying entropy decompression (e.g., Zstd) failed or produced invalid frame.
+    /// Blob requires a pre-shared Zstd dictionary SHA-256 ID that was not provided.
+    MissingDictionary([u8; 32]),
+    /// Provided Zstd dictionary SHA-256 ID does not match the header's dictionary ID.
+    DictionaryIdMismatch { expected: [u8; 32], found: [u8; 32] },
+    /// Underlying entropy decompression (e.g., Zstd) failed, lacked a required checksum,
+    /// or produced an invalid frame.
     EntropyDecodeFailed,
+}
+
+fn fmt_dict_id_prefix(f: &mut fmt::Formatter<'_>, id: &[u8; 32]) -> fmt::Result {
+    for &b in &id[..8] {
+        write!(f, "{b:02x}")?;
+    }
+    write!(f, "...")
 }
 
 impl fmt::Display for HyperCompError {
@@ -64,9 +72,15 @@ impl fmt::Display for HyperCompError {
             Self::InvalidU256Length(l) => write!(f, "invalid U256 length/shift: {l}"),
             Self::LengthMismatch => write!(f, "column length mismatch"),
             Self::LimitExceeded => write!(f, "safety decode limit exceeded"),
-            Self::MissingDictionary(id) => write!(f, "missing required Zstd dictionary id=0x{id:08x}"),
+            Self::MissingDictionary(id) => {
+                write!(f, "missing required Zstd dictionary sha256=0x")?;
+                fmt_dict_id_prefix(f, id)
+            }
             Self::DictionaryIdMismatch { expected, found } => {
-                write!(f, "dictionary id mismatch: expected 0x{expected:08x}, found 0x{found:08x}")
+                write!(f, "dictionary sha256 mismatch: expected 0x")?;
+                fmt_dict_id_prefix(f, expected)?;
+                write!(f, ", found 0x")?;
+                fmt_dict_id_prefix(f, found)
             }
             Self::EntropyDecodeFailed => write!(f, "entropy layer decompression failed"),
         }

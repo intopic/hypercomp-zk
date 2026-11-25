@@ -1,5 +1,8 @@
 MEMORY
 {
+    /* Code/rodata/data/bss region at base of the 64 MiB flat RV32IM benchmark RAM (0x8000_0000..0x8400_0000).
+       Heap: 0x8040_0000..0x8340_0000 (48 MiB) | Input mailbox: 0x8340_0000..0x83F0_0000 (11 MiB)
+       Output mailbox: 0x83F0_0000..0x83F1_0000 (64 KiB) | Stack: 0x83FF_FFF0 downward (~960 KiB). */
     RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 4M
 }
 

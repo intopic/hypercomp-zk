@@ -7,7 +7,7 @@ Open-source, 100% deterministic, zero-panic, `#![no_std]` (`#![forbid(unsafe_cod
 - **`#![no_std]` + `alloc` only** — zero C dependencies (`ruzstd` pure-Rust Zstd optional via `zstd-nostd` feature).
 - **`#![forbid(unsafe_code)]`** — zero `unsafe` blocks anywhere in the crate.
 - **32-bit RV32IM ↔ 64-bit x86_64 bit-exact parity** — all counts & indices are `u32`-bounded; U256/Rhind arithmetic uses native 32-bit limbs (`POW10` compile-time table).
-- **Zero panics on adversarial input** — strictly canonical LEB128 varints, strict Rhind bijection, trailing-byte rejection, Zstd XXH64 checksum & decompression-bomb guards.
+- **Zero panics & OOM-bomb protection** — canonical scalar primitives (LEB128 varints, Rhind U256, `DeltaOp`), strict ascending unique `(address, slot)` enforcement, trailing-byte rejection, remaining-byte RLE guards, mandatory Zstd XXH64 checksum, SHA-256 32-byte dictionary pinning, and `DecodeLimits::zkvm()`.
 
 ## Quick Usage (`#![no_std]` / zkVM Guest)
 
@@ -17,13 +17,16 @@ hypercomp-decoder = { version = "0.2", default-features = false, features = ["zs
 ```
 
 ```rust,no_run
-use hypercomp_decoder::decompress_state_deltas;
+use hypercomp_decoder::{
+    commit_state_deltas_sha256, decompress_state_deltas_with_limits, sha256_bytes, DecodeLimits,
+};
 
-pub fn verify_blob(blob: &[u8], trained_dict: Option<&[u8]>) {
-    let contracts = decompress_state_deltas(blob, trained_dict)
-        .expect("invalid or non-canonical HyperCompressor blob");
-    // Apply `contracts` storage deltas (`SetNew`, `Add`, `Sub`, `XorShifted`) to rollup state.
-    let _ = contracts;
+pub fn verify_blob(blob: &[u8], trained_dict: Option<&[u8]>) -> ([u8; 32], bool, [u8; 32]) {
+    let blob_hash = sha256_bytes(blob);
+    match decompress_state_deltas_with_limits(blob, trained_dict, DecodeLimits::zkvm()) {
+        Ok(contracts) => (blob_hash, true, commit_state_deltas_sha256(&contracts)),
+        Err(_) => (blob_hash, false, [0u8; 32]),
+    }
 }
 ```
 

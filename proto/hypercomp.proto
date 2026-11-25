@@ -36,7 +36,7 @@ message HealthRequest {}
 
 message HealthResponse {
   string version = 1;
-  repeated uint32 loaded_dict_ids = 2;
+  repeated bytes loaded_dict_ids = 2; // 32-byte SHA-256 dictionary IDs
   uint64 total_batches_compressed = 3;
   uint64 total_raw_bytes = 4;
   uint64 total_compressed_bytes = 5;
@@ -108,14 +108,14 @@ message CompressDeltasRequest {
   repeated ContractTransitionMsg contracts = 1;
   int32 zstd_level = 2;       // 0 uses server default (9); valid 1..=19
   EntropyMode entropy = 3;
-  uint32 dict_id = 4;         // Required when entropy == ENTROPY_ZSTD_WITH_DICT
+  bytes dict_id = 4;          // 32-byte SHA-256 ID; required when entropy == ENTROPY_ZSTD_WITH_DICT
 }
 
 message CompressUpdatesRequest {
   repeated ContractUpdateMsg contracts = 1;
   int32 zstd_level = 2;
   EntropyMode entropy = 3;
-  uint32 dict_id = 4;
+  bytes dict_id = 4;          // 32-byte SHA-256 ID; required when entropy == ENTROPY_ZSTD_WITH_DICT
 }
 
 message CompressResponse {
@@ -124,12 +124,12 @@ message CompressResponse {
   uint64 compressed_bytes = 3;
   double compression_ratio = 4;
   uint64 encode_micros = 5;
-  uint32 dict_id_used = 6;
+  bytes dict_id_used = 6;     // 32-byte SHA-256 ID (empty if no dictionary used)
 }
 
 message DecompressRequest {
   bytes blob = 1;
-  uint32 dict_id = 2; // Optional: auto-resolved from wire header when registered in sidecar
+  bytes dict_id = 2;          // Optional 32-byte SHA-256 ID: auto-resolved from wire header when registered
 }
 
 message DecompressDeltasResponse {
@@ -160,7 +160,7 @@ message TrainDictionaryRequest {
 }
 
 message TrainDictionaryResponse {
-  uint32 dict_id = 1;
+  bytes dict_id = 1;          // 32-byte SHA-256 dictionary ID
   bytes dict_bytes = 2;
   uint32 sample_count = 3;
 }
@@ -170,6 +170,6 @@ message LoadDictionaryRequest {
 }
 
 message LoadDictionaryResponse {
-  uint32 dict_id = 1;
+  bytes dict_id = 1;          // 32-byte SHA-256 dictionary ID
   uint64 dict_size = 2;
 }

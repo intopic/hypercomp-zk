@@ -11,7 +11,7 @@ documentation = "https://docs.rs/hypercomp-decoder"
 readme = "README.md"
 description = "Deterministic, zero-panic, #![no_std] RISC-V (SP1 / RISC Zero) decoder for Al-Samawal Rollup HyperCompressor EVM & ZK-Rollup state diffs"
 keywords = ["zk-rollup", "compression", "no-std", "riscv", "ethereum"]
-categories = ["compression", "no-std", "cryptography"]
+categories = ["compression", "no-std"]
 include = [
     "src/**/*",
     "tests/**/*",
@@ -28,6 +28,7 @@ zstd-nostd = ["dep:ruzstd"]
 
 [dependencies]
 ruzstd = { version = "0.9", default-features = false, features = ["hash"], optional = true }
+sha2 = { version = "0.10", default-features = false }
 
 [package.metadata.docs.rs]
 all-features = true

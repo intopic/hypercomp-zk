@@ -3,55 +3,61 @@
 //! Build with Succinct SP1 toolchain:
 //!   `cd zkvm/sp1-guest && cargo prove build`
 //!
-//! Proves inside SP1 (`riscv32im-succinct-zkvm-elf`) that a posted DA blob
-//! decompresses deterministically (100% lossless, zero-panic, strictly canonical)
-//! into the exact state deltas applied to the rollup state transition.
+//! Soundness guarantees:
+//! - Commits `blob_sha256 = SHA-256(blob)` so the on-chain verifier binds the proof
+//!   directly to the posted DA blob bytes (EIP-4844 / Bitcoin witness commitment).
+//! - Commits `dict_sha256 = SHA-256(dict)` (or `[0u8; 32]` when no dictionary is used)
+//!   so the verifier binds the proof to the approved pre-shared chain dictionary.
+//! - Uses `DecodeLimits::zkvm()` and NEVER panics (`.expect()`-free): malformed blobs
+//!   commit `is_valid = false` cleanly so permissionless DA chains never halt.
+//! - Commits `deltas_sha256 = commit_state_deltas_sha256(&contracts)`, binding EVERY
+//!   decoded contract address, nonce, storage slot, `DeltaOp` discriminant, and full value.
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use hypercomp_decoder::{decompress_state_deltas, DeltaOp};
+use hypercomp_decoder::{
+    commit_state_deltas_sha256, decompress_state_deltas_with_limits, sha256_bytes, DecodeLimits,
+};
 
 pub fn main() {
     // 1. Read compressed DA blob and optional pre-shared chain Zstd dictionary from SP1 stdin.
     let blob: Vec<u8> = sp1_zkvm::io::read_vec();
     let dict: Vec<u8> = sp1_zkvm::io::read_vec();
-    let dict_opt = if dict.is_empty() {
-        None
+
+    // 2. Cryptographically bind the raw input blob and dictionary bytes before decoding.
+    let blob_sha256 = sha256_bytes(&blob);
+    let (dict_opt, dict_sha256) = if dict.is_empty() {
+        (None, [0u8; 32])
     } else {
-        Some(dict.as_slice())
+        (Some(dict.as_slice()), sha256_bytes(&dict))
     };
 
-    // 2. Deterministically decompress using the #![no_std] zero-panic decoder.
-    let contracts = decompress_state_deltas(&blob, dict_opt)
-        .expect("invalid or non-canonical HyperCompressor blob");
-
-    // 3. Compute canonical commitment over decoded state deltas (replace with Keccak/Poseidon
-    //    or directly apply `contracts` to your rollup STF inside SP1).
-    let mut total_slots: u32 = 0;
-    let mut acc: u64 = 0xcbf2_9ce4_8422_2325;
-    for c in &contracts {
-        for &b in &c.address {
-            acc = (acc ^ (b as u64)).wrapping_mul(0x0100_0000_01b3);
-        }
-        for d in &c.storage_deltas {
-            total_slots += 1;
-            for &b in &d.slot {
-                acc = (acc ^ (b as u64)).wrapping_mul(0x0100_0000_01b3);
+    // 3. Deterministically decompress under strict zkVM memory & item bounds (zero panics).
+    match decompress_state_deltas_with_limits(&blob, dict_opt, DecodeLimits::zkvm()) {
+        Ok(contracts) => {
+            let mut total_slots: u32 = 0;
+            for c in &contracts {
+                total_slots = total_slots.saturating_add(c.storage_deltas.len() as u32);
             }
-            let tag = match d.op {
-                DeltaOp::NoChange => 0u8,
-                DeltaOp::SetNew(_) => 1u8,
-                DeltaOp::Add(_) => 2u8,
-                DeltaOp::Sub(_) => 3u8,
-                DeltaOp::XorShifted { .. } => 4u8,
-            };
-            acc = (acc ^ (tag as u64)).wrapping_mul(0x0100_0000_01b3);
+            let deltas_sha256 = commit_state_deltas_sha256(&contracts);
+
+            // 4. Commit complete cryptographic journal for on-chain DA + STF verification.
+            sp1_zkvm::io::commit(&blob_sha256);
+            sp1_zkvm::io::commit(&dict_sha256);
+            sp1_zkvm::io::commit(&true);
+            sp1_zkvm::io::commit(&(contracts.len() as u32));
+            sp1_zkvm::io::commit(&total_slots);
+            sp1_zkvm::io::commit(&deltas_sha256);
+        }
+        Err(_) => {
+            // Invalid/malformed permissionless DA blob: commit explicit rejection without halting.
+            sp1_zkvm::io::commit(&blob_sha256);
+            sp1_zkvm::io::commit(&dict_sha256);
+            sp1_zkvm::io::commit(&false);
+            sp1_zkvm::io::commit(&0u32);
+            sp1_zkvm::io::commit(&0u32);
+            sp1_zkvm::io::commit(&[0u8; 32]);
         }
     }
-
-    // 4. Commit public outputs to the SP1 proof journal.
-    sp1_zkvm::io::commit(&(contracts.len() as u32));
-    sp1_zkvm::io::commit(&total_slots);
-    sp1_zkvm::io::commit(&acc);
 }
