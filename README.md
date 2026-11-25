@@ -13,15 +13,22 @@ hypercomp-zk/
 │   └── risc0-guest/               # RISC Zero drop-in guest template
 ├── proto/hypercomp.proto          # Public gRPC interface contract for the Pro Sidecar
 └── docs/
-    ├── WEEK2_MAINNET_BENCHMARK.md # Verified EVM & Starknet mainnet benchmarks (37,960 real state diffs)
-    └── WEEK3_ZKVM_CYCLES.md       # Exact RV32IM cycle counts vs. Raw Zstd & Raw Zstd+Dict + Proving ROI
+    ├── MULTI_ROLLUP_MAINNET_BENCHMARK.md # Live multi-chain mainnet audit (Citrea, Eth L1, Base, Optimism, Polygon, Gnosis, Taiko)
+    ├── WEEK2_MAINNET_BENCHMARK.md        # Verified EVM & Starknet mainnet benchmarks (37,960 real state diffs)
+    └── WEEK3_ZKVM_CYCLES.md              # Exact RV32IM cycle counts vs. Raw Zstd & Raw Zstd+Dict + Proving ROI
 ```
 
 > **Open-Core Model:** The verifier/decoder (`hypercomp-decoder`), zkVM guest integrations, wire specification, and gRPC interface in this repository are permanently open-source under **MIT OR Apache-2.0** for full auditability and zero vendor lock-in. The commercial **Pro Encoder Engine & Docker gRPC Sidecar** (`hypercomp-pro`) is licensed separately for rollups & RaaS operators.
 
-## Verified Real EVM Mainnet Highlights
+## Verified Live Multi-Rollup Mainnet Highlights
 
-- **L1 DA Reduction (14 unseen 10-block EVM mainnet batches):** **+24.4% vs. Zstd**, **+23.3% vs. Brotli**, and **+6.8% incremental reduction on top of `Raw Zstd + 112KB Trained Dict`** (full transparent attribution in [`docs/WEEK2_MAINNET_BENCHMARK.md`](docs/WEEK2_MAINNET_BENCHMARK.md)).
+- **Citrea Mainnet (Bitcoin ZK-Rollup, Chain ID 4114):** **+25.3% vs. Brotli** (Citrea's production DA compressor), **+25.0% vs. Zstd**, and **+9.1% to +11.5% pure structural lift on top of `Raw Zstd + 112KB Dict`** ([`docs/MULTI_ROLLUP_MAINNET_BENCHMARK.md`](docs/MULTI_ROLLUP_MAINNET_BENCHMARK.md)).
+- **High-Density EVM DeFi Chains (Live RPC Audits, 100% lossless `#![no_std]` verified):**
+  - **Ethereum L1 Mainnet:** **+29.4% vs. Brotli**, **+31.9% vs. Zstd**, **+24.9% pure structural lift vs. `Raw Zstd + Dict`** (`+22.2% vs. Zstd` even *without* any dictionary!).
+  - **Base Mainnet:** **+28.8% vs. Brotli**, **+29.5% vs. Zstd**, **+12.9% vs. `Raw Zstd + Dict`**.
+  - **Optimism Mainnet:** **+23.4% vs. Brotli**, **+24.2% vs. Zstd**, **+9.7% vs. `Raw Zstd + Dict`**.
+  - **Gnosis Chain Mainnet:** **+23.3% vs. Brotli**, **+24.4% vs. Zstd**, **+6.8% vs. `Raw Zstd + Dict`** ([`docs/WEEK2_MAINNET_BENCHMARK.md`](docs/WEEK2_MAINNET_BENCHMARK.md)).
+  - **Polygon PoS Mainnet:** **+14.3% vs. Brotli**, **+17.9% vs. Zstd**, **+14.1% vs. `Raw Zstd + Dict`**.
 - **RV32IM zkVM Proving Cost (real bare-metal 176 KB ELF):** Only **+11.1% incremental cycles** (`+340,531` cyc) and **less guest RAM** (`527 KB` vs `558 KB`) compared to `Raw Zstd + Dict` → **344× – 860× incremental ROI** on Bitcoin DA and **34× – 86× incremental ROI** on Ethereum peak blobs ([`docs/WEEK3_ZKVM_CYCLES.md`](docs/WEEK3_ZKVM_CYCLES.md)).
 
 ## Quick Start
