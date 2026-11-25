@@ -39,9 +39,48 @@ pub enum HyperCompError {
     MissingDictionary([u8; 32]),
     /// Provided Zstd dictionary SHA-256 ID does not match the header's dictionary ID.
     DictionaryIdMismatch { expected: [u8; 32], found: [u8; 32] },
-    /// Underlying entropy decompression (e.g., Zstd) failed, lacked a required checksum,
-    /// or produced an invalid frame.
+    /// Underlying entropy decompression (e.g., Zstd) failed, lacked a required checksum
+    /// or `Frame_Content_Size`, or produced an invalid frame.
     EntropyDecodeFailed,
+}
+
+impl HyperCompError {
+    /// Stable non-zero numeric error code committed to zkVM journals when `is_valid == false`
+    /// (`0` is reserved for valid blobs).
+    #[inline]
+    pub const fn code(&self) -> u8 {
+        match self {
+            Self::InvalidMagic => 1,
+            Self::UnsupportedVersion(_) => 2,
+            Self::InvalidFlags(_) => 3,
+            Self::UnsupportedEntropyCodec(_) => 4,
+            Self::PayloadKindMismatch { .. } => 5,
+            Self::UnexpectedEof => 6,
+            Self::TrailingBytes(_) => 7,
+            Self::VarintOverflow => 8,
+            Self::NonCanonicalEncoding => 9,
+            Self::InvalidTag(_) => 10,
+            Self::InvalidExponent(_) => 11,
+            Self::U256Overflow => 12,
+            Self::InvalidIndex(_) => 13,
+            Self::InvalidU256Length(_) => 14,
+            Self::LengthMismatch => 15,
+            Self::LimitExceeded => 16,
+            Self::MissingDictionary(_) => 17,
+            Self::DictionaryIdMismatch { .. } => 18,
+            Self::EntropyDecodeFailed => 19,
+        }
+    }
+
+    /// Returns `true` when the error indicates a prover-supplied dictionary witness mismatch
+    /// (`MissingDictionary` or `DictionaryIdMismatch`) rather than an intrinsic wire defect (`C-2r`).
+    #[inline]
+    pub const fn is_prover_witness_error(&self) -> bool {
+        matches!(
+            self,
+            Self::MissingDictionary(_) | Self::DictionaryIdMismatch { .. }
+        )
+    }
 }
 
 fn fmt_dict_id_prefix(f: &mut fmt::Formatter<'_>, id: &[u8; 32]) -> fmt::Result {

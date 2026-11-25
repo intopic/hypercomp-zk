@@ -6,10 +6,11 @@ use sha2::{Digest, Sha256};
 use crate::dict::{dict_decode_fixed, slot_decode_column};
 use crate::error::HyperCompError;
 #[cfg(feature = "zstd-nostd")]
-use crate::header::parse_raw_fallback_tag;
+use crate::header::{parse_raw_fallback_tag, ZSTD_MAGIC};
 use crate::header::{
-    compute_dict_id, is_raw_zstd_fallback, EntropyCodec, PayloadKind, WireHeader,
-    MAX_DECOMPRESSED_BYTES, MAX_DECODE_ITEMS, MAX_OUTPUT_BYTES,
+    compute_dict_id, is_raw_zstd_fallback, EntropyCodec, PayloadKind, PrehashedDict, WireHeader,
+    EST_BYTES_PER_CONTRACT_OVERHEAD, EST_BYTES_PER_SLOT, EST_BYTES_PER_TRANSITION,
+    MAX_DECOMPRESSED_BYTES, MAX_DECODE_ITEMS, MAX_OUTPUT_BYTES, MAX_ZSTD_WINDOW_BYTES,
 };
 use crate::poly::alsamawal_poly_decode_exact;
 use crate::rhind::{delta_decode_column, rhind_decode_column, DeltaOp};
@@ -47,12 +48,7 @@ impl StateDiff {
             return Err(HyperCompError::UnexpectedEof);
         }
         let n = raw.len() / REC_LEN;
-        if u32::try_from(n).map_or(true, |v| v > limits.max_items) {
-            return Err(HyperCompError::LimitExceeded);
-        }
-        if raw.len() > limits.max_output_bytes {
-            return Err(HyperCompError::LimitExceeded);
-        }
+        limits.check_transitions(n)?;
         let mut out = Vec::with_capacity(n);
         for chunk in raw.chunks_exact(REC_LEN) {
             let mut address = [0u8; 20];
@@ -99,18 +95,15 @@ fn decode_raw_updates_generic<const ADDR_LEN: usize>(
 ) -> Result<Vec<RawContractUpdates<ADDR_LEN>>, HyperCompError> {
     let mut pos = 0usize;
     let mut out = Vec::new();
-    let mut total_slots = 0u32;
-    let mut total_contracts = 0u32;
-    let mut estimated_out_bytes = 0usize;
+    let mut total_slots = 0usize;
+    let mut total_contracts = 0usize;
     let mut prev_addr: Option<[u8; ADDR_LEN]> = None;
 
     while pos < raw.len() {
         total_contracts = total_contracts
             .checked_add(1)
             .ok_or(HyperCompError::LimitExceeded)?;
-        if total_contracts > limits.max_items {
-            return Err(HyperCompError::LimitExceeded);
-        }
+        limits.check_contract_batch(total_contracts, total_slots, ADDR_LEN)?;
         if raw.len().saturating_sub(pos) < ADDR_LEN + 1 {
             return Err(HyperCompError::UnexpectedEof);
         }
@@ -146,25 +139,16 @@ fn decode_raw_updates_generic<const ADDR_LEN: usize>(
         }
         let cnt_u32 = u32::from_be_bytes([raw[pos], raw[pos + 1], raw[pos + 2], raw[pos + 3]]);
         pos += 4;
-        total_slots = total_slots
-            .checked_add(cnt_u32)
-            .ok_or(HyperCompError::LimitExceeded)?;
-        if total_slots > limits.max_items {
-            return Err(HyperCompError::LimitExceeded);
-        }
         let cnt = usize::try_from(cnt_u32).map_err(|_| HyperCompError::LimitExceeded)?;
+        total_slots = total_slots
+            .checked_add(cnt)
+            .ok_or(HyperCompError::LimitExceeded)?;
+        limits.check_contract_batch(total_contracts, total_slots, ADDR_LEN)?;
         let need_bytes = cnt
             .checked_mul(64)
             .ok_or(HyperCompError::LimitExceeded)?;
         if raw.len().saturating_sub(pos) < need_bytes {
             return Err(HyperCompError::UnexpectedEof);
-        }
-        estimated_out_bytes = estimated_out_bytes
-            .checked_add(ADDR_LEN + 16)
-            .and_then(|v| v.checked_add(need_bytes))
-            .ok_or(HyperCompError::LimitExceeded)?;
-        if estimated_out_bytes > limits.max_output_bytes {
-            return Err(HyperCompError::LimitExceeded);
         }
 
         let mut storage_updates = Vec::with_capacity(cnt);
@@ -319,18 +303,15 @@ fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
 ) -> Result<Vec<RawContractDeltas<ADDR_LEN>>, HyperCompError> {
     let mut pos = 0usize;
     let mut out = Vec::new();
-    let mut total_slots = 0u32;
-    let mut total_contracts = 0u32;
-    let mut estimated_out_bytes = 0usize;
+    let mut total_slots = 0usize;
+    let mut total_contracts = 0usize;
     let mut prev_addr: Option<[u8; ADDR_LEN]> = None;
 
     while pos < raw.len() {
         total_contracts = total_contracts
             .checked_add(1)
             .ok_or(HyperCompError::LimitExceeded)?;
-        if total_contracts > limits.max_items {
-            return Err(HyperCompError::LimitExceeded);
-        }
+        limits.check_contract_batch(total_contracts, total_slots, ADDR_LEN)?;
         if raw.len().saturating_sub(pos) < ADDR_LEN + 1 {
             return Err(HyperCompError::UnexpectedEof);
         }
@@ -372,23 +353,11 @@ fn decode_raw_deltas_generic<const ADDR_LEN: usize>(
         }
         let cnt_u32 = u32::from_be_bytes([raw[pos], raw[pos + 1], raw[pos + 2], raw[pos + 3]]);
         pos += 4;
-        total_slots = total_slots
-            .checked_add(cnt_u32)
-            .ok_or(HyperCompError::LimitExceeded)?;
-        if total_slots > limits.max_items {
-            return Err(HyperCompError::LimitExceeded);
-        }
         let cnt = usize::try_from(cnt_u32).map_err(|_| HyperCompError::LimitExceeded)?;
-        estimated_out_bytes = estimated_out_bytes
-            .checked_add(ADDR_LEN + 16)
-            .and_then(|v| {
-                cnt.checked_mul(68)
-                    .and_then(|slot_b| v.checked_add(slot_b))
-            })
+        total_slots = total_slots
+            .checked_add(cnt)
             .ok_or(HyperCompError::LimitExceeded)?;
-        if estimated_out_bytes > limits.max_output_bytes {
-            return Err(HyperCompError::LimitExceeded);
-        }
+        limits.check_contract_batch(total_contracts, total_slots, ADDR_LEN)?;
 
         let mut prev_slot: Option<[u8; 32]> = None;
         if !is_compact {
@@ -631,32 +600,83 @@ impl StarknetContractDelta {
     }
 }
 
-/// Safety limits enforced during untrusted / zkVM decoding.
+/// Safety limits enforced identically across encoder, sidecar, full nodes, and zkVM guests (`N-1`).
+///
+/// Using a single canonical consensus profile (`DecodeLimits::CONSENSUS`) guarantees that every
+/// batch accepted by the encoder & L2 full nodes also decodes inside a 48 MiB bump-allocator
+/// 32-bit RISC-V zkVM guest without OOM or consensus divergence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DecodeLimits {
     pub max_items: u32,
     pub max_decompressed_bytes: usize,
     pub max_output_bytes: usize,
+    pub max_window_bytes: usize,
+}
+
+impl DecodeLimits {
+    /// Single canonical consensus profile enforced identically by `Default`, `zkvm()`, encoder,
+    /// and sidecar (`100k` items, `8 MiB` pre-entropy, `8 MiB` Zstd window, `16 MiB` calibrated output).
+    pub const CONSENSUS: Self = Self {
+        max_items: MAX_DECODE_ITEMS,
+        max_decompressed_bytes: MAX_DECOMPRESSED_BYTES,
+        max_output_bytes: MAX_OUTPUT_BYTES,
+        max_window_bytes: MAX_ZSTD_WINDOW_BYTES,
+    };
+
+    /// Alias for [`Self::CONSENSUS`] tailored for 32-bit RISC-V zkVM guests (SP1 / RISC Zero).
+    #[inline]
+    pub const fn zkvm() -> Self {
+        Self::CONSENSUS
+    }
+
+    /// Validates an ordered `StateDiff` transition batch against `max_items` and calibrated
+    /// `max_output_bytes` (`EST_BYTES_PER_TRANSITION`).
+    #[inline]
+    pub fn check_transitions(&self, count: usize) -> Result<(), HyperCompError> {
+        if u32::try_from(count).map_or(true, |v| v > self.max_items) {
+            return Err(HyperCompError::LimitExceeded);
+        }
+        let est = count
+            .checked_mul(EST_BYTES_PER_TRANSITION)
+            .ok_or(HyperCompError::LimitExceeded)?;
+        if est > self.max_output_bytes {
+            return Err(HyperCompError::LimitExceeded);
+        }
+        Ok(())
+    }
+
+    /// Validates a contract-grouped DA batch (`num_contracts`, `total_slots`, `addr_len`) against
+    /// `max_items` and calibrated bump-allocator `max_output_bytes` (`EST_BYTES_PER_SLOT = 144`).
+    #[inline]
+    pub fn check_contract_batch(
+        &self,
+        num_contracts: usize,
+        total_slots: usize,
+        addr_len: usize,
+    ) -> Result<(), HyperCompError> {
+        if u32::try_from(num_contracts).map_or(true, |v| v > self.max_items)
+            || u32::try_from(total_slots).map_or(true, |v| v > self.max_items)
+        {
+            return Err(HyperCompError::LimitExceeded);
+        }
+        let est = num_contracts
+            .checked_mul(addr_len.saturating_add(EST_BYTES_PER_CONTRACT_OVERHEAD))
+            .and_then(|c| {
+                total_slots
+                    .checked_mul(EST_BYTES_PER_SLOT)
+                    .and_then(|s| c.checked_add(s))
+            })
+            .ok_or(HyperCompError::LimitExceeded)?;
+        if est > self.max_output_bytes {
+            return Err(HyperCompError::LimitExceeded);
+        }
+        Ok(())
+    }
 }
 
 impl Default for DecodeLimits {
     fn default() -> Self {
-        Self {
-            max_items: MAX_DECODE_ITEMS,
-            max_decompressed_bytes: MAX_DECOMPRESSED_BYTES,
-            max_output_bytes: MAX_OUTPUT_BYTES,
-        }
-    }
-}
-
-impl DecodeLimits {
-    /// Conservative memory & cycle limits tailored for 32-bit RISC-V zkVM guests (SP1 / RISC Zero).
-    pub const fn zkvm() -> Self {
-        Self {
-            max_items: 1_000_000,
-            max_decompressed_bytes: 16 * 1024 * 1024,
-            max_output_bytes: 16 * 1024 * 1024,
-        }
+        Self::CONSENSUS
     }
 }
 
@@ -688,10 +708,7 @@ pub fn decode_state_transitions_raw(
     if n > pre.len().saturating_sub(pos) {
         return Err(HyperCompError::UnexpectedEof);
     }
-    let out_bytes = n.checked_mul(116).ok_or(HyperCompError::LimitExceeded)?;
-    if out_bytes > limits.max_output_bytes {
-        return Err(HyperCompError::LimitExceeded);
-    }
+    limits.check_transitions(n)?;
     let addrs = dict_decode_fixed::<20>(pre, &mut pos, n, limits.max_items)?;
     let slots = slot_decode_column(pre, &mut pos, n, limits.max_items)?;
 
@@ -824,22 +841,11 @@ fn decode_contract_skeleton<const ADDR_LEN: usize>(
         counts.push(c);
     }
 
-    // H-1 RLE OOM-bomb guard: every slot requires at least 1 byte in the value/delta column,
-    // and total decoded output must stay within `limits.max_output_bytes`.
+    // H-1 RLE OOM-bomb guard & calibrated bump-allocator output bound (N-1 / N-2).
     if total_slots > pre.len().saturating_sub(*pos) {
         return Err(HyperCompError::UnexpectedEof);
     }
-    let est_out = num_contracts
-        .checked_mul(ADDR_LEN + 16)
-        .and_then(|c| {
-            total_slots
-                .checked_mul(68)
-                .and_then(|s| c.checked_add(s))
-        })
-        .ok_or(HyperCompError::LimitExceeded)?;
-    if est_out > limits.max_output_bytes {
-        return Err(HyperCompError::LimitExceeded);
-    }
+    limits.check_contract_batch(num_contracts, total_slots, ADDR_LEN)?;
     validate_strictly_ascending(&addresses)?;
 
     Ok((addresses, nonces, counts, total_slots))
@@ -977,21 +983,11 @@ fn decode_starknet_skeleton(
         counts.push(c);
     }
 
-    // H-1 RLE OOM-bomb guard & strict ascending contract address check
+    // H-1 RLE OOM-bomb guard & calibrated bump-allocator output bound (N-1 / N-2).
     if total_slots > pre.len().saturating_sub(*pos) {
         return Err(HyperCompError::UnexpectedEof);
     }
-    let est_out = num_contracts
-        .checked_mul(48)
-        .and_then(|c| {
-            total_slots
-                .checked_mul(68)
-                .and_then(|s| c.checked_add(s))
-        })
-        .ok_or(HyperCompError::LimitExceeded)?;
-    if est_out > limits.max_output_bytes {
-        return Err(HyperCompError::LimitExceeded);
-    }
+    limits.check_contract_batch(num_contracts, total_slots, 32)?;
     validate_strictly_ascending(&addresses)?;
 
     Ok((addresses, nonces, counts, total_slots))
@@ -1079,12 +1075,26 @@ pub fn decode_starknet_deltas_raw(
 fn decompress_zstd_nostd(
     compressed: &[u8],
     dict_bytes: Option<&[u8]>,
-    max_decompressed_bytes: usize,
+    limits: DecodeLimits,
 ) -> Result<Vec<u8>, HyperCompError> {
     use ruzstd::decoding::{BlockDecodingStrategy, FrameDecoder};
 
+    // RFC 8878 header pre-check before any allocation (`N-2` / `M-2`):
+    // require both `Frame_Content_Size` (fcs_flag != 0 || single_segment == 1)
+    // and `Content_Checksum_Flag` (bit 2) to be present on every HyperComp Zstd frame.
+    if compressed.len() < 5 || compressed[..4] != ZSTD_MAGIC {
+        return Err(HyperCompError::EntropyDecodeFailed);
+    }
+    let fhd = compressed[4];
+    let fcs_present = ((fhd >> 6) != 0) || (((fhd >> 5) & 1) != 0);
+    let checksum_present = ((fhd >> 2) & 1) != 0;
+    if !fcs_present || !checksum_present {
+        return Err(HyperCompError::EntropyDecodeFailed);
+    }
+
     let mut decoder = FrameDecoder::new();
-    decoder.set_max_window_size(max_decompressed_bytes as u64);
+    let max_window = limits.max_window_bytes.min(limits.max_decompressed_bytes);
+    decoder.set_max_window_size(max_window as u64);
 
     if let Some(raw_dict) = dict_bytes {
         let dict = ruzstd::decoding::Dictionary::decode_dict(raw_dict)
@@ -1099,15 +1109,14 @@ fn decompress_zstd_nostd(
         .reset(&mut cursor)
         .map_err(|_| HyperCompError::EntropyDecodeFailed)?;
 
-    let declared_size = decoder.content_size();
-    if declared_size > max_decompressed_bytes as u64 {
+    let declared_size =
+        usize::try_from(decoder.content_size()).map_err(|_| HyperCompError::LimitExceeded)?;
+    if declared_size > limits.max_decompressed_bytes {
         return Err(HyperCompError::LimitExceeded);
     }
 
-    let initial_cap = usize::try_from(declared_size)
-        .unwrap_or(0)
-        .min(1024 * 1024);
-    let mut out = Vec::with_capacity(initial_cap);
+    // Reserve exact declared size ONCE to eliminate Vec doubling leaks in bump-allocator zkVMs (`N-2`).
+    let mut out = Vec::with_capacity(declared_size);
 
     while !decoder.is_finished() {
         decoder
@@ -1118,8 +1127,8 @@ fn decompress_zstd_nostd(
                 .len()
                 .checked_add(chunk.len())
                 .ok_or(HyperCompError::LimitExceeded)?;
-            if new_len > max_decompressed_bytes {
-                return Err(HyperCompError::LimitExceeded);
+            if new_len > declared_size {
+                return Err(HyperCompError::EntropyDecodeFailed);
             }
             out.extend_from_slice(&chunk);
         }
@@ -1130,10 +1139,14 @@ fn decompress_zstd_nostd(
             .len()
             .checked_add(chunk.len())
             .ok_or(HyperCompError::LimitExceeded)?;
-        if new_len > max_decompressed_bytes {
-            return Err(HyperCompError::LimitExceeded);
+        if new_len > declared_size {
+            return Err(HyperCompError::EntropyDecodeFailed);
         }
         out.extend_from_slice(&chunk);
+    }
+
+    if out.len() != declared_size {
+        return Err(HyperCompError::EntropyDecodeFailed);
     }
 
     // Verify mandatory Zstd XXH64 content checksum on all HyperComp Zstd frames (H-3 / M-2).
@@ -1152,11 +1165,11 @@ fn decompress_zstd_nostd(
     Ok(out)
 }
 
-/// Unwraps the versioned wire header and entropy layer into the raw pre-entropy payload bytes.
-pub fn unwrap_frame<'a>(
+fn unwrap_frame_inner<'a>(
     blob: &'a [u8],
     expected_kind: PayloadKind,
     dict_bytes: Option<&[u8]>,
+    prehashed_id: Option<[u8; 32]>,
     limits: DecodeLimits,
 ) -> Result<alloc::borrow::Cow<'a, [u8]>, HyperCompError> {
     let mut pos = 0usize;
@@ -1170,12 +1183,16 @@ pub fn unwrap_frame<'a>(
     let body = &blob[pos..];
 
     match header.entropy {
-        EntropyCodec::None => Ok(alloc::borrow::Cow::Borrowed(body)),
+        EntropyCodec::None => {
+            if body.len() > limits.max_decompressed_bytes {
+                return Err(HyperCompError::LimitExceeded);
+            }
+            Ok(alloc::borrow::Cow::Borrowed(body))
+        }
         EntropyCodec::Zstd => {
             #[cfg(feature = "zstd-nostd")]
             {
-                let decompressed =
-                    decompress_zstd_nostd(body, None, limits.max_decompressed_bytes)?;
+                let decompressed = decompress_zstd_nostd(body, None, limits)?;
                 Ok(alloc::borrow::Cow::Owned(decompressed))
             }
             #[cfg(not(feature = "zstd-nostd"))]
@@ -1189,7 +1206,7 @@ pub fn unwrap_frame<'a>(
         EntropyCodec::ZstdWithDict => {
             let expected_id = header.dict_id.ok_or(HyperCompError::UnexpectedEof)?;
             let raw_dict = dict_bytes.ok_or(HyperCompError::MissingDictionary(expected_id))?;
-            let actual_id = compute_dict_id(raw_dict);
+            let actual_id = prehashed_id.unwrap_or_else(|| compute_dict_id(raw_dict));
             if actual_id != expected_id {
                 return Err(HyperCompError::DictionaryIdMismatch {
                     expected: expected_id,
@@ -1198,8 +1215,7 @@ pub fn unwrap_frame<'a>(
             }
             #[cfg(feature = "zstd-nostd")]
             {
-                let decompressed =
-                    decompress_zstd_nostd(body, Some(raw_dict), limits.max_decompressed_bytes)?;
+                let decompressed = decompress_zstd_nostd(body, Some(raw_dict), limits)?;
                 Ok(alloc::borrow::Cow::Owned(decompressed))
             }
             #[cfg(not(feature = "zstd-nostd"))]
@@ -1213,19 +1229,48 @@ pub fn unwrap_frame<'a>(
     }
 }
 
-fn decompress_raw_zstd_fallback(
+/// Unwraps the versioned wire header and entropy layer into the raw pre-entropy payload bytes.
+pub fn unwrap_frame<'a>(
+    blob: &'a [u8],
+    expected_kind: PayloadKind,
+    dict_bytes: Option<&[u8]>,
+    limits: DecodeLimits,
+) -> Result<alloc::borrow::Cow<'a, [u8]>, HyperCompError> {
+    unwrap_frame_inner(blob, expected_kind, dict_bytes, None, limits)
+}
+
+/// Unwraps a versioned frame using a [`PrehashedDict`], avoiding duplicate dictionary SHA-256
+/// hashing in zkVM guests (`N-5`).
+pub fn unwrap_frame_with_prehashed_dict<'a>(
+    blob: &'a [u8],
+    expected_kind: PayloadKind,
+    dict: Option<PrehashedDict<'_>>,
+    limits: DecodeLimits,
+) -> Result<alloc::borrow::Cow<'a, [u8]>, HyperCompError> {
+    unwrap_frame_inner(
+        blob,
+        expected_kind,
+        dict.map(|d| d.bytes()),
+        dict.map(|d| d.id()),
+        limits,
+    )
+}
+
+/// Decompresses a domain-separated Raw Zstd fallback frame without cloning the payload (`N-2`).
+/// Caller reads payload bytes starting at `&raw[1..]` (byte 0 is the validated `version|kind` tag).
+fn decompress_raw_zstd_fallback_tagged(
     blob: &[u8],
     expected_kind: PayloadKind,
     limits: DecodeLimits,
 ) -> Result<Vec<u8>, HyperCompError> {
     #[cfg(feature = "zstd-nostd")]
     {
-        let raw = decompress_zstd_nostd(blob, None, limits.max_decompressed_bytes)?;
+        let raw = decompress_zstd_nostd(blob, None, limits)?;
         if raw.is_empty() {
             return Err(HyperCompError::UnexpectedEof);
         }
         parse_raw_fallback_tag(raw[0], expected_kind)?;
-        Ok(raw[1..].to_vec())
+        Ok(raw)
     }
     #[cfg(not(feature = "zstd-nostd"))]
     {
@@ -1252,8 +1297,8 @@ pub fn decompress_state_transitions_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<StateDiff>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StateTransitions, limits)?;
-        return StateDiff::from_raw_bytes(&raw, limits);
+        let raw = decompress_raw_zstd_fallback_tagged(blob, PayloadKind::StateTransitions, limits)?;
+        return StateDiff::from_raw_bytes(&raw[1..], limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StateTransitions, dict, limits)?;
     decode_state_transitions_raw(&pre, limits)
@@ -1275,10 +1320,24 @@ pub fn decompress_state_updates_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<ContractDiff>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StateUpdates, limits)?;
-        return ContractDiff::from_raw_bytes(&raw, limits);
+        let raw = decompress_raw_zstd_fallback_tagged(blob, PayloadKind::StateUpdates, limits)?;
+        return ContractDiff::from_raw_bytes(&raw[1..], limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StateUpdates, dict, limits)?;
+    decode_state_updates_raw(&pre, limits)
+}
+
+/// Decompresses a full framed `StateUpdates` blob using a [`PrehashedDict`] (`N-5`).
+pub fn decompress_state_updates_with_prehashed_dict(
+    blob: &[u8],
+    dict: Option<PrehashedDict<'_>>,
+    limits: DecodeLimits,
+) -> Result<Vec<ContractDiff>, HyperCompError> {
+    if is_raw_zstd_fallback(blob) {
+        let raw = decompress_raw_zstd_fallback_tagged(blob, PayloadKind::StateUpdates, limits)?;
+        return ContractDiff::from_raw_bytes(&raw[1..], limits);
+    }
+    let pre = unwrap_frame_with_prehashed_dict(blob, PayloadKind::StateUpdates, dict, limits)?;
     decode_state_updates_raw(&pre, limits)
 }
 
@@ -1298,10 +1357,24 @@ pub fn decompress_state_deltas_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<ContractDelta>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StateDeltas, limits)?;
-        return ContractDelta::from_raw_bytes(&raw, limits);
+        let raw = decompress_raw_zstd_fallback_tagged(blob, PayloadKind::StateDeltas, limits)?;
+        return ContractDelta::from_raw_bytes(&raw[1..], limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StateDeltas, dict, limits)?;
+    decode_state_deltas_raw(&pre, limits)
+}
+
+/// Decompresses a full framed `StateDeltas` blob using a [`PrehashedDict`] (`N-5`).
+pub fn decompress_state_deltas_with_prehashed_dict(
+    blob: &[u8],
+    dict: Option<PrehashedDict<'_>>,
+    limits: DecodeLimits,
+) -> Result<Vec<ContractDelta>, HyperCompError> {
+    if is_raw_zstd_fallback(blob) {
+        let raw = decompress_raw_zstd_fallback_tagged(blob, PayloadKind::StateDeltas, limits)?;
+        return ContractDelta::from_raw_bytes(&raw[1..], limits);
+    }
+    let pre = unwrap_frame_with_prehashed_dict(blob, PayloadKind::StateDeltas, dict, limits)?;
     decode_state_deltas_raw(&pre, limits)
 }
 
@@ -1320,8 +1393,8 @@ pub fn decompress_starknet_updates_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<StarknetContractDiff>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StarknetUpdates, limits)?;
-        return StarknetContractDiff::from_raw_bytes(&raw, limits);
+        let raw = decompress_raw_zstd_fallback_tagged(blob, PayloadKind::StarknetUpdates, limits)?;
+        return StarknetContractDiff::from_raw_bytes(&raw[1..], limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StarknetUpdates, dict, limits)?;
     decode_starknet_updates_raw(&pre, limits)
@@ -1342,8 +1415,8 @@ pub fn decompress_starknet_deltas_with_limits(
     limits: DecodeLimits,
 ) -> Result<Vec<StarknetContractDelta>, HyperCompError> {
     if is_raw_zstd_fallback(blob) {
-        let raw = decompress_raw_zstd_fallback(blob, PayloadKind::StarknetDeltas, limits)?;
-        return StarknetContractDelta::from_raw_bytes(&raw, limits);
+        let raw = decompress_raw_zstd_fallback_tagged(blob, PayloadKind::StarknetDeltas, limits)?;
+        return StarknetContractDelta::from_raw_bytes(&raw[1..], limits);
     }
     let pre = unwrap_frame(blob, PayloadKind::StarknetDeltas, dict, limits)?;
     decode_starknet_deltas_raw(&pre, limits)
@@ -1358,7 +1431,7 @@ pub fn decompress_starknet_deltas_with_limits(
 /// slots, `DeltaOp` tags, full 32B operand values, and `XorShifted` shifts/masks).
 pub fn commit_state_deltas_sha256(contracts: &[ContractDelta]) -> [u8; 32] {
     let mut h = Sha256::new();
-    h.update(b"HYPERCOMP-DELTAS-COMMIT-V2:");
+    h.update(b"HYPERCOMP-DELTAS-COMMIT-V3:");
     h.update((contracts.len() as u64).to_be_bytes());
     for c in contracts {
         h.update(c.address);
@@ -1403,7 +1476,7 @@ pub fn commit_state_deltas_sha256(contracts: &[ContractDelta]) -> [u8; 32] {
 /// covering EVERY field of `Vec<ContractDiff>`.
 pub fn commit_state_updates_sha256(contracts: &[ContractDiff]) -> [u8; 32] {
     let mut h = Sha256::new();
-    h.update(b"HYPERCOMP-UPDATES-COMMIT-V2:");
+    h.update(b"HYPERCOMP-UPDATES-COMMIT-V3:");
     h.update((contracts.len() as u64).to_be_bytes());
     for c in contracts {
         h.update(c.address);

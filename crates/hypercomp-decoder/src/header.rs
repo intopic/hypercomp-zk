@@ -18,17 +18,32 @@ pub fn is_raw_zstd_fallback(blob: &[u8]) -> bool {
     blob.len() >= ZSTD_MAGIC.len() && blob[..4] == ZSTD_MAGIC
 }
 
-/// Current versioned wire format.
-pub const FORMAT_VERSION: u8 = 2;
+/// Current versioned wire format (v3: SHA-256 dict_id, domain-separated fallback,
+/// mandatory Zstd XXH64 checksum + Frame_Content_Size, strict ascending keys, consensus limits).
+pub const FORMAT_VERSION: u8 = 3;
 
-/// Default hard cap on items decoded in a single batch (prevents OOM in zkVMs & untrusted nodes).
-pub const MAX_DECODE_ITEMS: u32 = 1_000_000;
+/// Canonical consensus hard cap on items (contracts or storage slots) decoded in a single batch.
+/// Chosen so worst-case bump-allocator zkVM peak memory stays safely under a 48 MiB guest heap.
+pub const MAX_DECODE_ITEMS: u32 = 100_000;
 
-/// Default hard cap on Zstd-decompressed pre-entropy buffer (32 MiB bomb guard).
-pub const MAX_DECOMPRESSED_BYTES: usize = 32 * 1024 * 1024;
+/// Canonical consensus hard cap on Zstd-decompressed pre-entropy or raw fallback payload (8 MiB).
+pub const MAX_DECOMPRESSED_BYTES: usize = 8 * 1024 * 1024;
 
-/// Default hard cap on estimated decoded in-memory output size (64 MiB bomb guard).
-pub const MAX_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
+/// Canonical consensus hard cap on Zstd sliding window size (8 MiB — covers Zstd levels 1..=19).
+pub const MAX_ZSTD_WINDOW_BYTES: usize = 8 * 1024 * 1024;
+
+/// Canonical consensus hard cap on calibrated decoded in-memory output footprint (16 MiB).
+pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+
+/// Calibrated peak heap estimate per storage slot (bytes), including intermediate columnar vectors
+/// and final `StorageUpdate`/`StorageDelta` allocations under bump-allocator zkVM guests (`N-2`).
+pub const EST_BYTES_PER_SLOT: usize = 144;
+
+/// Calibrated peak heap estimate per contract header overhead (bytes).
+pub const EST_BYTES_PER_CONTRACT_OVERHEAD: usize = 64;
+
+/// Calibrated peak heap estimate per `StateDiff` transition record (bytes).
+pub const EST_BYTES_PER_TRANSITION: usize = 240;
 
 /// Structured payload schema carried inside the compressed frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -184,4 +199,36 @@ pub fn sha256_bytes(data: &[u8]) -> [u8; 32] {
 #[inline]
 pub fn compute_dict_id(dict_bytes: &[u8]) -> DictId {
     sha256_bytes(dict_bytes)
+}
+
+/// Type-safe wrapper pairing raw Zstd dictionary bytes with their SHA-256 [`DictId`] computed once.
+///
+/// Eliminates duplicate SHA-256 hashing of large (~112 KB) dictionaries in zkVM guests (`N-5`),
+/// where the guest must commit `dict.id()` to its public journal and then verify the same ID
+/// inside the decoder.
+#[derive(Clone, Copy, Debug)]
+pub struct PrehashedDict<'a> {
+    bytes: &'a [u8],
+    id: DictId,
+}
+
+impl<'a> PrehashedDict<'a> {
+    /// Computes `SHA-256(bytes)` once and binds it immutably to `bytes`.
+    #[inline]
+    pub fn new(bytes: &'a [u8]) -> Self {
+        Self {
+            bytes,
+            id: compute_dict_id(bytes),
+        }
+    }
+
+    #[inline]
+    pub const fn bytes(&self) -> &'a [u8] {
+        self.bytes
+    }
+
+    #[inline]
+    pub const fn id(&self) -> DictId {
+        self.id
+    }
 }

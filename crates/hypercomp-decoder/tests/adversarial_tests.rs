@@ -16,8 +16,8 @@ use hypercomp_decoder::{
     decompress_state_transitions, decompress_state_transitions_with_limits,
     decompress_state_updates_with_limits, is_raw_zstd_fallback, parse_raw_fallback_tag,
     raw_fallback_tag, rhind_decode_u256, ContractDelta, ContractDiff, DecodeLimits, DeltaOp,
-    HyperCompError, PayloadKind, StateDiff, StorageDelta, StorageUpdate, WireHeader,
-    FORMAT_VERSION, MAGIC, POW10, U256, ZSTD_MAGIC,
+    HyperCompError, PayloadKind, PrehashedDict, StateDiff, StorageDelta, StorageUpdate,
+    WireHeader, FORMAT_VERSION, MAGIC, POW10, U256, ZSTD_MAGIC,
 };
 
 #[test]
@@ -258,6 +258,7 @@ fn test_adversarial_zero_panic_fuzz_10000_random_blobs() {
         max_items: 4096,
         max_decompressed_bytes: 128 * 1024,
         max_output_bytes: 256 * 1024,
+        max_window_bytes: 128 * 1024,
     };
 
     for case in 0..10_000usize {
@@ -411,6 +412,7 @@ fn test_raw_fallback_canonicality_and_bounds() {
         max_items: 2,
         max_decompressed_bytes: 1024,
         max_output_bytes: 1024,
+        max_window_bytes: 1024,
     };
     assert_eq!(
         ContractDelta::from_raw_bytes(&raw_d, tight),
@@ -421,20 +423,20 @@ fn test_raw_fallback_canonicality_and_bounds() {
 #[test]
 fn test_audit_poc_regressions_h1_h2_h3_h4_m2_l2_c2() {
     // --- PoC-2 (H-1): 71-byte DICT_MODE_RLE OOM bomb must be rejected IMMEDIATELY without allocating! ---
-    // Craft StateDeltas pre-entropy claiming 1 contract, 1_000_000 slots, RLE 1 run of 1_000_000.
+    // 50_000 slots stays under `max_items = 100_000` so the remaining-byte RLE guard is specifically exercised.
+    // varint(50_000): 50_000 = 0xC350 -> [0xD0, 0x86, 0x03]
     let mut rle_bomb = Vec::new();
     rle_bomb.push(1); // num_contracts = 1
     rle_bomb.extend_from_slice(&[0xAA; 20]); // address
     rle_bomb.push(0); // nonce bitmap = 0
-    // slot count = 1_000_000 (varint: 0xC0, 0x84, 0x3D)
-    rle_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]);
+    rle_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]); // slot count = 50_000
     rle_bomb.push(0); // SLOT_MODE_DICT32
     rle_bomb.push(DICT_MODE_RLE);
     rle_bomb.push(1); // vlen = 1
     rle_bomb.extend_from_slice(&[0xBB; 32]); // 1 vocab entry
     rle_bomb.push(1); // num_runs = 1
     rle_bomb.push(0); // idx = 0
-    rle_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]); // run_len = 1_000_000
+    rle_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]); // run_len = 50_000
     assert_eq!(
         decode_state_deltas_raw(&rle_bomb, DecodeLimits::default()),
         Err(HyperCompError::UnexpectedEof)
@@ -444,15 +446,15 @@ fn test_audit_poc_regressions_h1_h2_h3_h4_m2_l2_c2() {
         Err(HyperCompError::UnexpectedEof)
     );
 
-    // Same RLE bomb for StateTransitions (74-byte bomb!)
+    // Same RLE bomb for StateTransitions (50_000 transitions)
     let mut trans_bomb = Vec::new();
-    trans_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]); // n = 1_000_000
+    trans_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]); // n = 50_000
     trans_bomb.push(DICT_MODE_RLE);
     trans_bomb.push(1); // vlen = 1
     trans_bomb.extend_from_slice(&[0xAA; 20]);
     trans_bomb.push(1);
     trans_bomb.push(0);
-    trans_bomb.extend_from_slice(&[0xC0, 0x84, 0x3D]);
+    trans_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]);
     assert_eq!(
         decode_state_transitions_raw(&trans_bomb, DecodeLimits::zkvm()),
         Err(HyperCompError::UnexpectedEof)
@@ -577,4 +579,80 @@ fn test_audit_poc_regressions_h1_h2_h3_h4_m2_l2_c2() {
         commit_state_deltas_sha256(&diff_nonce),
         "SHA-256 commitment MUST bind contract nonces!"
     );
+}
+
+#[test]
+fn test_round2_audit_regressions_n1_n2_n4_n5_c2r() {
+    // --- N-1: Single canonical consensus profile everywhere (no encoder/node/zkVM divergence) ---
+    assert_eq!(DecodeLimits::default(), DecodeLimits::CONSENSUS);
+    assert_eq!(DecodeLimits::zkvm(), DecodeLimits::CONSENSUS);
+
+    // --- N-2: Calibrated 144 B/slot & 100k-item cap blocks PoC R-7 (240k-slot heap bomb) ---
+    assert_eq!(
+        DecodeLimits::CONSENSUS.check_contract_batch(1, 240_000, 20),
+        Err(HyperCompError::LimitExceeded)
+    );
+    assert!(DecodeLimits::CONSENSUS
+        .check_contract_batch(1, 100_000, 20)
+        .is_ok());
+
+    // --- N-2 (PoC R-3): Zstd frame WITHOUT Frame_Content_Size (fcs_flag=0, single_segment=0)
+    // must be rejected BEFORE any decompression allocation! ---
+    // Magic (4B) + FHD=0x04 (checksum=1, fcs=0, single_seg=0) + window_desc=0x00 + empty last block
+    let no_fcs_zstd = [
+        ZSTD_MAGIC[0],
+        ZSTD_MAGIC[1],
+        ZSTD_MAGIC[2],
+        ZSTD_MAGIC[3],
+        0x04, // checksum bit set, but NO Frame_Content_Size!
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+    ];
+    let mut hc_no_fcs = vec![
+        MAGIC[0],
+        MAGIC[1],
+        FORMAT_VERSION,
+        (PayloadKind::StateDeltas as u8) | (1u8 << 3), // EntropyCodec::Zstd
+    ];
+    hc_no_fcs.extend_from_slice(&no_fcs_zstd);
+    assert_eq!(
+        decompress_state_deltas_with_limits(&hc_no_fcs, None, DecodeLimits::CONSENSUS),
+        Err(HyperCompError::EntropyDecodeFailed)
+    );
+    assert_eq!(
+        decompress_state_deltas_with_limits(&no_fcs_zstd, None, DecodeLimits::CONSENSUS),
+        Err(HyperCompError::EntropyDecodeFailed)
+    );
+
+    // --- N-4: Wire format version bumped to v3; legacy v2 headers & fallback tags rejected ---
+    assert_eq!(FORMAT_VERSION, 3);
+    assert_eq!(
+        WireHeader::decode(&[MAGIC[0], MAGIC[1], 2, 0], &mut 0),
+        Err(HyperCompError::UnsupportedVersion(2))
+    );
+    assert_eq!(
+        parse_raw_fallback_tag((2u8 << 4) | (PayloadKind::StateDeltas as u8), PayloadKind::StateDeltas),
+        Err(HyperCompError::UnsupportedVersion(2))
+    );
+
+    // --- N-5: PrehashedDict computes SHA-256 once and matches compute_dict_id ---
+    let raw_dict = b"prehashed-zkvm-dictionary-bytes";
+    let pre = PrehashedDict::new(raw_dict);
+    assert_eq!(pre.bytes(), raw_dict);
+    assert_eq!(pre.id(), compute_dict_id(raw_dict));
+
+    // --- C-2r: Error classification distinguishes prover witness faults from blob defects ---
+    assert!(HyperCompError::MissingDictionary([0u8; 32]).is_prover_witness_error());
+    assert!(HyperCompError::DictionaryIdMismatch {
+        expected: [1u8; 32],
+        found: [2u8; 32],
+    }
+    .is_prover_witness_error());
+    assert!(!HyperCompError::LimitExceeded.is_prover_witness_error());
+    assert!(!HyperCompError::EntropyDecodeFailed.is_prover_witness_error());
+    assert!(!HyperCompError::InvalidMagic.is_prover_witness_error());
+    assert_ne!(HyperCompError::LimitExceeded.code(), 0);
+    assert_ne!(HyperCompError::EntropyDecodeFailed.code(), 0);
 }

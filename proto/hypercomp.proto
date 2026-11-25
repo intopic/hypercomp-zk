@@ -105,6 +105,10 @@ enum EntropyMode {
 }
 
 message CompressDeltasRequest {
+  // MUST be sorted in strictly ascending order by `address` (no duplicates),
+  // and each contract's `storage` MUST be sorted in strictly ascending order by `slot`
+  // (no duplicates). Unsorted or duplicate inputs are rejected with `INVALID_ARGUMENT`.
+  // Batch totals must fit within `DecodeLimits::CONSENSUS` (<= 100k slots, <= 8 MiB pre-entropy).
   repeated ContractTransitionMsg contracts = 1;
   int32 zstd_level = 2;       // 0 uses server default (9); valid 1..=19
   EntropyMode entropy = 3;
@@ -112,6 +116,8 @@ message CompressDeltasRequest {
 }
 
 message CompressUpdatesRequest {
+  // MUST be sorted in strictly ascending order by `(address, slot)` with no duplicates;
+  // unsorted/duplicate inputs or batches exceeding `DecodeLimits::CONSENSUS` return `INVALID_ARGUMENT`.
   repeated ContractUpdateMsg contracts = 1;
   int32 zstd_level = 2;
   EntropyMode entropy = 3;

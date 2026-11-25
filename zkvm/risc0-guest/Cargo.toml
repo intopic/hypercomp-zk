@@ -10,3 +10,8 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 risc0-zkvm = { version = "1.2", default-features = false, features = ["std"] }
 hypercomp-decoder = { path = "../../crates/hypercomp-decoder", default-features = false, features = ["zstd-nostd"] }
+
+# Enable RISC Zero hardware-accelerated SHA-256 precompile for `sha2 0.10` (`N-5`).
+# Without this patch, SHA-256 runs in pure software (~6.56M RV32IM instructions per 112 KB dict).
+[patch.crates-io]
+sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2/v0.10.8-risczero.0" }

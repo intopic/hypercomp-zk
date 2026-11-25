@@ -34,8 +34,9 @@ pub mod varint;
 pub use error::HyperCompError;
 pub use header::{
     compute_dict_id, is_raw_zstd_fallback, parse_raw_fallback_tag, raw_fallback_tag, sha256_bytes,
-    DictId, EntropyCodec, PayloadKind, WireHeader, FORMAT_VERSION, MAGIC, MAX_DECOMPRESSED_BYTES,
-    MAX_DECODE_ITEMS, MAX_OUTPUT_BYTES, ZSTD_MAGIC,
+    DictId, EntropyCodec, PayloadKind, PrehashedDict, WireHeader, EST_BYTES_PER_CONTRACT_OVERHEAD,
+    EST_BYTES_PER_SLOT, EST_BYTES_PER_TRANSITION, FORMAT_VERSION, MAGIC, MAX_DECOMPRESSED_BYTES,
+    MAX_DECODE_ITEMS, MAX_OUTPUT_BYTES, MAX_ZSTD_WINDOW_BYTES, ZSTD_MAGIC,
 };
 pub use poly::{alsamawal_poly_decode, alsamawal_poly_decode_exact};
 pub use rhind::{delta_decode_column, rhind_decode_column, rhind_decode_u256, DeltaOp};
@@ -44,10 +45,12 @@ pub use state_diff::{
     decode_starknet_updates_raw, decode_state_deltas_raw, decode_state_transitions_raw,
     decode_state_updates_raw, decompress_starknet_deltas, decompress_starknet_deltas_with_limits,
     decompress_starknet_updates, decompress_starknet_updates_with_limits, decompress_state_deltas,
-    decompress_state_deltas_with_limits, decompress_state_transitions,
-    decompress_state_transitions_with_limits, decompress_state_updates,
-    decompress_state_updates_with_limits, unwrap_frame, ContractDelta, ContractDiff, DecodeLimits,
-    StarknetContractDelta, StarknetContractDiff, StateDiff, StorageDelta, StorageUpdate,
+    decompress_state_deltas_with_limits, decompress_state_deltas_with_prehashed_dict,
+    decompress_state_transitions, decompress_state_transitions_with_limits,
+    decompress_state_updates, decompress_state_updates_with_limits,
+    decompress_state_updates_with_prehashed_dict, unwrap_frame, unwrap_frame_with_prehashed_dict,
+    ContractDelta, ContractDiff, DecodeLimits, StarknetContractDelta, StarknetContractDiff,
+    StateDiff, StorageDelta, StorageUpdate,
 };
 pub use u256::{MAX_POW10_EXP, POW10, U256};
 pub use varint::{
