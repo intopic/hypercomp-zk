@@ -23,10 +23,12 @@
 //!    - On **Ethereum EIP-4844**, pair with a KZG point-evaluation / equivalence proof linking
 //!      `blob_sha256` to the EIP-4844 blob `versioned_hash`.
 //!    - On **Bitcoin (e.g. Citrea)**, pair with a Bitcoin light-client Taproot witness inclusion proof.
-//! 4. **Prover-Fault Separation:** Prover-controlled dictionary witness faults (`MissingDictionary`,
-//!    `DictionaryIdMismatch`) **abort proving** instead of committing `is_valid = 0`, so a
-//!    malicious prover can NEVER suppress an honest batch by withholding/swapping the dictionary.
-//!    Intrinsic blob defects commit `(is_valid = 0, error_code = err.code())` cleanly.
+//! 4. **Total Provability (`R3-2`):** EVERY decode error — including `MissingDictionary` (17) and
+//!    `DictionaryIdMismatch` (18) — commits `(is_valid = 0, error_code = err.code())`; the guest
+//!    never aborts on blob content. A malicious prover cannot use this to suppress an honest batch,
+//!    because withholding or swapping the dictionary changes `journal.dict_sha256`, which rule 2
+//!    rejects. A blob whose header references an unapproved dictionary is therefore provably
+//!    invalid instead of unprovable (which would halt permissionless DA chains).
 //! 5. **Consensus Limit Parity (`N-1` / `N-2`):** Enforces `DecodeLimits::CONSENSUS` identically to
 //!    encoder, sidecar, and full nodes (`100k` slots, `8 MiB` pre-entropy, `8 MiB` Zstd window,
 //!    `16 MiB` calibrated output, mandatory `Frame_Content_Size` + XXH64 checksum).
@@ -137,7 +139,7 @@ pub fn main() {
         other => Err(HyperCompError::InvalidFlags(other)),
     };
 
-    // 4. Commit canonical 107-byte journal (or abort proving on prover-supplied witness fault).
+    // 4. Commit canonical 107-byte journal for every outcome (never abort on blob content, R3-2).
     match outcome {
         Ok((num_contracts, total_slots, payload_sha256)) => {
             let journal = pack_journal(
@@ -153,10 +155,8 @@ pub fn main() {
             sp1_zkvm::io::commit_slice(&journal);
         }
         Err(err) => {
-            assert!(
-                !err.is_prover_witness_error(),
-                "prover supplied missing or mismatched Zstd dictionary witness"
-            );
+            // Dictionary faults (17/18) are committed too; verifier rule 2 pins `dict_sha256`
+            // to the approved dictionary, so the prover cannot fake invalidity (R3-2).
             let journal = pack_journal(
                 mode,
                 blob_sha256,

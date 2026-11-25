@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Al-Samawal Rollup HyperCompressor v3 â€” One-Click Succinct SP1 v6 RTX 4090 CUDA GPU Benchmark
+# Al-Samawal Rollup HyperCompressor v3 — One-Click Succinct SP1 v6 RTX 4090 CUDA GPU Benchmark
 # Run inside WSL2 Ubuntu (Windows RTX 4090) or native Linux x86_64 with NVIDIA CUDA 12 runtime.
 #
 # Usage:
 #   ./run_sp1_gpu_bench.sh                 # Full run: Execute + RTX 4090 CUDA Core & Compressed proofs
-#   ./run_sp1_gpu_bench.sh --execute-only  # Fast run (~10s): Exact SP1 cycles + 6/6 live security tests (no GPU proving)
+#   ./run_sp1_gpu_bench.sh --execute-only  # Fast run (~10s): Exact SP1 cycles + 7/7 live security tests (no GPU proving)
 #   ./run_sp1_gpu_bench.sh --core-only     # Execute + RTX 4090 Core STARK proofs only
 
 export PATH="$HOME/.sp1/bin:$HOME/.cargo/bin:$PATH"
@@ -27,7 +27,7 @@ for arg in "$@"; do
 done
 
 echo "=========================================================================================="
-echo "  Al-Samawal HyperCompressor v3 â€” Succinct SP1 v6 GPU Engineering Test Suite"
+echo "  Al-Samawal HyperCompressor v3 — Succinct SP1 v6 GPU Engineering Test Suite"
 echo "=========================================================================================="
 
 echo "[1/4] Checking GPU & Toolchain Environment..."
@@ -56,7 +56,7 @@ echo "[2/4] Verifying Open-Source #![no_std] Decoder Tests (hypercomp-decoder v3
 (cd ../.. && cargo test --workspace --all-features --locked)
 
 echo ""
-echo "[3/4] Running Fast SP1 Execution & 6/6 Live Adversarial Security Tests (SHA-256 Precompile)..."
+echo "[3/4] Running Fast SP1 Execution & 7/7 Live Adversarial Security Tests (SHA-256 Precompile)..."
 RUST_LOG=warn SP1_PROVER=cpu cargo run --release -- \
   --mode execute \
   --out-md sp1_execute_report.md \

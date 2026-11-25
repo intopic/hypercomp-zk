@@ -403,9 +403,9 @@ async fn main() -> Result<()> {
     }
 
     // -----------------------------------------------------------------------
-    // PART B: 6 LIVE ADVERSARIAL SECURITY TESTS INSIDE REAL SP1 zkVM
+    // PART B: 7 LIVE ADVERSARIAL SECURITY TESTS INSIDE REAL SP1 zkVM
     // -----------------------------------------------------------------------
-    println!("\n=== PART B: 6 LIVE ADVERSARIAL SECURITY TESTS INSIDE REAL SP1 zkVM ===");
+    println!("\n=== PART B: 7 LIVE ADVERSARIAL SECURITY TESTS INSIDE REAL SP1 zkVM ===");
     let mut sec_results = Vec::new();
 
     // Load Gnosis Deltas + Dict + Wrong Dict for live adversarial attacks
@@ -454,85 +454,94 @@ async fn main() -> Result<()> {
         });
     }
 
-    // S2: C-2r Malicious Prover Omits Dictionary -> MUST PANIC / NON-ZERO EXIT (cannot produce valid exit_code=0 proof!)
+    // R3-2 verifier policy model: the L1 verifier accepts a journal ONLY if
+    // `dict_sha256 == APPROVED_CHAIN_DICT_SHA256` (here: SHA-256 of the Gnosis deltas dictionary).
+    let approved_dict_sha256 = sha256_bytes(&gnosis_dict);
+    let verifier_accepts = |j: &DecodedJournal| j.dict_sha256 == approved_dict_sha256;
+
+    // S2: Malicious prover omits the dictionary -> guest commits is_valid=false (code 17), but the
+    // journal carries dict_sha256 = 0x00.., so the verifier REJECTS it (prover cannot suppress the batch).
     {
         let stdin = build_stdin(MODE_HC_DELTAS, &gnosis_blob, &[]);
-        let (aborted, detail) = match client.execute(HYPERCOMP_SP1_ELF, stdin.clone()).await {
-            Err(_) => (
-                true,
-                "SP1 guest aborted execution (MissingDictionary cannot forge is_valid=false)"
-                    .to_string(),
-            ),
-            Ok((_, rep)) if rep.exit_code != 0 => {
-                let mut extra = String::new();
-                if let Some(ref pk) = pk_opt {
-                    // Cryptographically prove on GPU that a panicked witness proof FAILS verification!
-                    if let Ok(bad_proof) = client.prove(pk, stdin).core().await {
-                        if client.verify(&bad_proof, pk.verifying_key(), None).is_ok() {
-                            bail!("SECURITY FAILURE S2: panicked proof passed verify(..., None)!");
-                        }
-                        extra = ", verified that panicked proof is REJECTED by SP1 verifier".into();
-                    }
-                }
-                (
-                    true,
-                    format!(
-                        "SP1 guest panicked with exit_code={} (MissingDictionary unverifiable{extra})",
-                        rep.exit_code
-                    ),
-                )
-            }
-            Ok((pv, rep)) => (
-                false,
-                format!(
-                    "UNEXPECTED exit_code=0, pv_len={}",
-                    pv.as_slice().len() + rep.exit_code as usize
-                ),
-            ),
-        };
-        if !aborted {
-            bail!("SECURITY FAILURE S2 (C-2r): prover omitted dictionary and guest did NOT abort: {detail}");
+        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+        if rep.exit_code != 0 {
+            bail!("S2 guest must not abort on blob content (exit_code={})", rep.exit_code);
         }
-        println!("  [PASS] S2 (C-2r Prover Omits Dict)     : {detail}");
+        let j = DecodedJournal::from_slice(pv.as_slice())?;
+        let missing_code = HyperCompError::MissingDictionary([0u8; 32]).code();
+        if j.is_valid || j.error_code != missing_code || verifier_accepts(&j) {
+            bail!("SECURITY FAILURE S2 (R3-2): omitted-dictionary journal would be accepted: {j:?}");
+        }
+        let detail = format!(
+            "committed is_valid=false, error_code={missing_code} with dict_sha256=0x00.. -> REJECTED by verifier policy (cannot suppress honest batch)"
+        );
+        println!("  [PASS] S2 (Prover Omits Dict)          : {detail}");
         sec_results.push(SecurityTestResult {
             id: "S2".into(),
-            name: "C-2r Prover Witness Fault: Missing Dictionary Aborts Proving".into(),
+            name: "R3-2 Prover Omits Dictionary: Journal Rejected by dict_sha256 Policy".into(),
             passed: true,
-            sp1_cycles: None,
+            sp1_cycles: Some(rep.total_instruction_count()),
             detail,
         });
     }
 
-    // S3: C-2r Malicious Prover Swaps Wrong Dictionary -> MUST PANIC / NON-ZERO EXIT!
+    // S3: Malicious prover swaps in a wrong dictionary -> code 18, dict_sha256 != APPROVED -> rejected.
     {
         let stdin = build_stdin(MODE_HC_DELTAS, &gnosis_blob, &wrong_dict);
-        let (aborted, detail) = match client.execute(HYPERCOMP_SP1_ELF, stdin).await {
-            Err(_) => (
-                true,
-                "SP1 guest aborted execution (DictionaryIdMismatch cannot forge is_valid=false)"
-                    .to_string(),
-            ),
-            Ok((_, rep)) if rep.exit_code != 0 => (
-                true,
-                format!(
-                    "SP1 guest panicked with exit_code={} (DictionaryIdMismatch unverifiable)",
-                    rep.exit_code
-                ),
-            ),
-            Ok((pv, _)) => (
-                false,
-                format!("UNEXPECTED exit_code=0, pv_len={}", pv.as_slice().len()),
-            ),
-        };
-        if !aborted {
-            bail!("SECURITY FAILURE S3 (C-2r): prover supplied wrong dictionary and guest did NOT abort: {detail}");
+        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+        if rep.exit_code != 0 {
+            bail!("S3 guest must not abort on blob content (exit_code={})", rep.exit_code);
         }
-        println!("  [PASS] S3 (C-2r Prover Swaps Dict)     : {detail}");
+        let j = DecodedJournal::from_slice(pv.as_slice())?;
+        let mismatch_code = HyperCompError::DictionaryIdMismatch {
+            expected: [0u8; 32],
+            found: [0u8; 32],
+        }
+        .code();
+        if j.is_valid || j.error_code != mismatch_code || verifier_accepts(&j) {
+            bail!("SECURITY FAILURE S3 (R3-2): swapped-dictionary journal would be accepted: {j:?}");
+        }
+        let detail = format!(
+            "committed is_valid=false, error_code={mismatch_code} with unapproved dict_sha256 -> REJECTED by verifier policy"
+        );
+        println!("  [PASS] S3 (Prover Swaps Dict)          : {detail}");
         sec_results.push(SecurityTestResult {
             id: "S3".into(),
-            name: "C-2r Prover Witness Fault: Mismatched Dictionary Aborts Proving".into(),
+            name: "R3-2 Prover Swaps Dictionary: Journal Rejected by dict_sha256 Policy".into(),
             passed: true,
-            sp1_cycles: None,
+            sp1_cycles: Some(rep.total_instruction_count()),
+            detail,
+        });
+    }
+
+    // S7: Poster publishes a blob whose HEADER references an unapproved dictionary. The honest prover
+    // supplies the approved dictionary -> provably invalid (code 18, dict_sha256 == APPROVED, accepted),
+    // instead of an unprovable blob that would halt a permissionless-DA chain.
+    {
+        let rogue_blob = fs::read(args.fixtures_dir.join("gnosis_hc_updates_dict.bin"))?;
+        let stdin = build_stdin(MODE_HC_UPDATES, &rogue_blob, &gnosis_dict);
+        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+        if rep.exit_code != 0 {
+            bail!("S7 rogue-header blob halted proving (exit_code={})", rep.exit_code);
+        }
+        let j = DecodedJournal::from_slice(pv.as_slice())?;
+        let mismatch_code = HyperCompError::DictionaryIdMismatch {
+            expected: [0u8; 32],
+            found: [0u8; 32],
+        }
+        .code();
+        if j.is_valid || j.error_code != mismatch_code || !verifier_accepts(&j) {
+            bail!("S7 rogue-header blob not provably invalid: {j:?}");
+        }
+        let detail = format!(
+            "blob referencing unapproved dictionary committed is_valid=false, error_code={mismatch_code}, dict_sha256 == APPROVED -> accepted as provably invalid (no liveness halt)"
+        );
+        println!("  [PASS] S7 (Rogue Dict Header Blob)     : {detail}");
+        sec_results.push(SecurityTestResult {
+            id: "S7".into(),
+            name: "R3-2 Blob Referencing Unapproved Dictionary Is Provably Invalid".into(),
+            passed: true,
+            sp1_cycles: Some(rep.total_instruction_count()),
             detail,
         });
     }
@@ -689,7 +698,7 @@ async fn main() -> Result<()> {
     fs::write(&args.out_md, &md)?;
 
     println!("\n==========================================================================================");
-    println!("  ALL BENCHMARKS & 6/6 LIVE SP1 SECURITY TESTS PASSED!");
+    println!("  ALL BENCHMARKS & 7/7 LIVE SP1 SECURITY TESTS PASSED!");
     println!("  Markdown report saved : {}", args.out_md.display());
     println!("  JSON report saved     : {}", args.out_json.display());
     println!("==========================================================================================");

@@ -14,10 +14,11 @@ Self-contained engineering verification package running the open-source **`hyper
    - **Citrea Mainnet** (Bitcoin ZK-Rollup, Chain ID 4114 — 39 unseen active blocks, 17 contracts, 131 net slots, `8,865 B` raw DA):
      - `Raw Zstd + Dict` (`4,822 B`) vs. `HC v3 Updates + Dict` (`4,379 B`, **-9.2%**) vs. `HC v3 Deltas + Dict` (`4,291 B`, **-11.0%**)
    - Verifies **100% bit-exact 107-byte public journal parity** against `x86_64` ground truth AND asserts cryptographic lossless equivalence (`HC Updates payload_sha256 == Raw Zstd payload_sha256`).
-2. **6 Live Adversarial Security Tests Inside Real SP1:**
+2. **7 Live Adversarial Security Tests Inside Real SP1:**
    - **`S1` Bit-Flip Corrupt Blob:** Zero panic; cleanly commits `is_valid=false, error_code=19` (+ proves & verifies rejection on GPU).
-   - **`S2` `C-2r` Prover Omits Dictionary:** Aborts/panics guest (`exit_code != 0`); verified that a panicked proof **FAILS** SP1 verifier (malicious prover cannot forge `is_valid=false`).
-   - **`S3` `C-2r` Prover Swaps Wrong Dictionary:** Aborts/panics guest (`exit_code != 0`).
+   - **`S2` `R3-2` Prover Omits Dictionary:** Guest commits `is_valid=false, error_code=17` with `dict_sha256=0x00..`, which the verifier policy (`dict_sha256 == APPROVED`) **rejects** — a malicious prover cannot suppress an honest batch.
+   - **`S3` `R3-2` Prover Swaps Wrong Dictionary:** Guest commits `error_code=18` with an unapproved `dict_sha256` → **rejected** by the verifier policy.
+   - **`S7` `R3-2` Blob Header References Unapproved Dictionary:** Honest prover with the approved dictionary commits `is_valid=false, error_code=18, dict_sha256 == APPROVED` → **provably invalid** (no liveness halt on permissionless DA).
    - **`S4` `H-1` 71-Byte RLE OOM Bomb:** Cleanly rejected (`error_code=6 UnexpectedEof`) with 0 MiB allocated.
    - **`S5` `N-2` Missing `Frame_Content_Size` (PoC R-3):** Cleanly rejected (`error_code=19`).
    - **`S6` `N-4` Legacy `v2` Frame:** Cleanly rejected (`error_code=2 UnsupportedVersion`).
@@ -57,7 +58,7 @@ cp -r /mnt/c/Users/<YOUR_USER>/Desktop/hypercomp-zk ~/hypercomp-zk
 cd ~/hypercomp-zk/zkvm/sp1-host
 chmod +x run_sp1_gpu_bench.sh
 
-# Full run: Exact SP1 cycles (SHA-256 precompile) + 6/6 live security tests + REAL RTX 4090 Core & Compressed ZK proofs!
+# Full run: Exact SP1 cycles (SHA-256 precompile) + 7/7 live security tests + REAL RTX 4090 Core & Compressed ZK proofs!
 ./run_sp1_gpu_bench.sh
 ```
 
