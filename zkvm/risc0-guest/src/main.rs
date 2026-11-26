@@ -1,7 +1,9 @@
 //! RISC Zero zkVM Guest Program for Al-Samawal Rollup HyperCompressor (`FORMAT_VERSION = 3`).
 //!
-//! Build with RISC Zero toolchain:
-//!   `cd zkvm/risc0-guest && cargo +risc0 build --release --target riscv32im-risc0-zkvm-elf`
+//! Build with the official RISC Zero pipeline (`rzup install`, then):
+//!   `cd zkvm/risc0-methods && cargo build --release`
+//! (`risc0_build::embed_methods()` applies the required rustflags, linker script and `getrandom`
+//! backend, and exposes `HYPERCOMP_RISC0_GUEST_ELF` / `HYPERCOMP_RISC0_GUEST_ID`.)
 //!
 //! ## Fixed 107-Byte Canonical Public Journal Layout (Big-Endian, Identical to `sp1-guest`)
 //! - `[0..1]`    `mode: u8` (`0` = HC `StateDeltas`, `1` = HC `StateUpdates`, `2` = Raw Zstd `StateUpdates` baseline)

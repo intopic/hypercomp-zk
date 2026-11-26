@@ -10,8 +10,9 @@ hypercomp-zk/
 ├── zkvm/
 │   ├── riscv-guest/               # Bare-metal riscv32im-unknown-none-elf ELF benchmark guest (200 KB)
 │   ├── sp1-guest/                 # Succinct SP1 v6 guest (107B journal, PrehashedDict, SHA-256 precompile patch)
-│   ├── sp1-host/                  # Reproducible SP1 v6 CUDA GPU benchmark & 6-test live security suite (+ v3 fixtures)
-│   └── risc0-guest/               # RISC Zero guest committing SHA-256(blob), SHA-256(dict), validity & full delta commitment
+│   ├── sp1-host/                  # Reproducible SP1 v6 CUDA GPU benchmark & 7-test live security suite (+ v3 fixtures)
+│   ├── risc0-guest/               # RISC Zero guest committing SHA-256(blob), SHA-256(dict), validity & full delta commitment
+│   └── risc0-methods/             # Builds risc0-guest via risc0-build (`cargo build --release`), exposes ELF + image ID
 ├── proto/hypercomp.proto          # Public gRPC interface contract for the Pro Sidecar (32B SHA-256 dict IDs)
 └── docs/
     ├── MULTI_ROLLUP_MAINNET_BENCHMARK.md # Multi-chain mainnet audit (Citrea, Gnosis, Eth L1, Base, Optimism, Polygon, Taiko)
