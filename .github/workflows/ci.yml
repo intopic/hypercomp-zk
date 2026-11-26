@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -51,6 +52,36 @@ jobs:
       - name: Build SP1 guest ELF
         working-directory: zkvm/sp1-guest
         run: cargo prove build
+
+  # GPU_TEST_PLAN.md steps 2.1-2.4 on a CPU runner: decoder tests, 8 fixtures (107-byte journals vs
+  # expected_manifest.json), HC == Raw Zstd lossless parity and the 7/7 live security suite (S1-S7)
+  # executed inside the real SP1 v6 zkVM. Real CUDA proofs (step 2.5) still need a GPU machine.
+  sp1-execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler pkg-config libssl-dev
+      - name: Install SP1 toolchain (pinned to v6.10.0 matching sp1-guest)
+        run: |
+          curl -L https://sp1up.succinct.xyz | bash
+          ~/.sp1/bin/sp1up -v v6.10.0
+          echo "$HOME/.sp1/bin" >> "$GITHUB_PATH"
+      - name: Run SP1 execute-only suite (fixtures + 7/7 security tests)
+        working-directory: zkvm/sp1-host
+        run: bash run_sp1_gpu_bench.sh --execute-only
+      - name: Upload execute report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: sp1-execute-report
+          path: |
+            zkvm/sp1-host/sp1_execute_report.*
+            zkvm/sp1-host/Cargo.lock
+            zkvm/sp1-guest/Cargo.lock
+          if-no-files-found: warn
 
   risc0-guest:
     runs-on: ubuntu-latest
