@@ -12,7 +12,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: riscv32im-unknown-none-elf
@@ -41,7 +41,7 @@ jobs:
   sp1-guest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Install SP1 toolchain (pinned to v6.10.0 matching sp1-guest)
         run: |
@@ -55,7 +55,7 @@ jobs:
   risc0-guest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Install RISC Zero toolchain
         run: |
