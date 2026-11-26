@@ -1,0 +1,17 @@
+[package]
+name = "hypercomp-risc0-methods"
+version = "0.2.0"
+edition = "2021"
+description = "Builds the RISC Zero guest (`zkvm/risc0-guest`) with the official risc0-build pipeline and exposes its ELF + image ID"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[build-dependencies]
+risc0-build = "3.0"
+
+# `risc0_build::embed_methods()` compiles every guest listed here with the correct RISC Zero
+# rustflags, linker script and `getrandom` backend (plain `cargo +risc0 build` does not).
+[package.metadata.risc0]
+methods = ["../risc0-guest"]
