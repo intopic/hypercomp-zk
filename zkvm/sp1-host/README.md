@@ -70,5 +70,5 @@ Fast execution-only mode (no GPU proving, ~10 seconds):
 ### Step 3 — Collect Results
 
 After completion, two ready-to-share report files are created in `~/hypercomp-zk/zkvm/sp1-host/`:
-- `sp1_gpu_bench_report.md` (clean Markdown table ready for `docs/WEEK3_ZKVM_CYCLES.md` & Grant Applications)
+- `sp1_gpu_bench_report.md` (clean Markdown table ready for `benchmarks/README.md` & grant applications)
 - `sp1_gpu_bench_report.json` (full raw JSON telemetry)

@@ -1,0 +1,162 @@
+{
+ "arbitrum": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 676.7142857142857,
+  "blobs_per_day": 2030.142857142857,
+  "blob_fill_pct": 99.63058531808615,
+  "posted_mb_per_day": 265.111891,
+  "blob_fee_usd_per_day": {
+   "mean": 53.92647506857546,
+   "min": 2.620526916756316,
+   "max": 201.01919341844615
+  },
+  "execution_fee_usd_per_day": 152.50114810025897,
+  "l2_blocks_per_day": 312931,
+  "l2_blocks_per_posting_tx": 462.4270635423264,
+  "posted_bytes_per_l2_block": 847.1896072936206
+ },
+ "base": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 2678.8571428571427,
+  "blobs_per_day": 13217.42857142857,
+  "blob_fill_pct": 95.65460629089135,
+  "posted_mb_per_day": 1657.153685,
+  "blob_fee_usd_per_day": {
+   "mean": 268.9979882247896,
+   "min": 18.93893363626373,
+   "max": 839.7744614688526
+  },
+  "execution_fee_usd_per_day": 97.96595228607006,
+  "l2_blocks_per_day": 432000,
+  "l2_blocks_per_posting_tx": 161.2627986348123,
+  "posted_bytes_per_l2_block": 3836.003900462963
+ },
+ "linea": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 8.0,
+  "blobs_per_day": 24.0,
+  "blob_fill_pct": 98.21573893229166,
+  "posted_mb_per_day": 3.0896,
+  "blob_fee_usd_per_day": {
+   "mean": 0.0990424052392108,
+   "min": 0.028654874442000808,
+   "max": 0.23124531903983553
+  },
+  "execution_fee_usd_per_day": 1.6867206501730145,
+  "l2_blocks_per_day": 9214,
+  "l2_blocks_per_posting_tx": 1151.75,
+  "posted_bytes_per_l2_block": 335.31582374647274
+ },
+ "optimism": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 683.5714285714286,
+  "blobs_per_day": 3416.714285714286,
+  "blob_fill_pct": 97.39593322118469,
+  "posted_mb_per_day": 436.17363742857145,
+  "blob_fee_usd_per_day": {
+   "mean": 26.85939418132827,
+   "min": 6.805976568076712,
+   "max": 72.29452308541863
+  },
+  "execution_fee_usd_per_day": 15.320296524706833,
+  "l2_blocks_per_day": 43200,
+  "l2_blocks_per_posting_tx": 63.19749216300941,
+  "posted_bytes_per_l2_block": 10096.611977513227
+ },
+ "scroll": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 15.714285714285714,
+  "blobs_per_day": 27.142857142857142,
+  "blob_fill_pct": 84.99237462093956,
+  "posted_mb_per_day": 3.023747,
+  "blob_fee_usd_per_day": {
+   "mean": 0.5801550751820859,
+   "min": 0.02642620078450414,
+   "max": 2.7157425677003477
+  },
+  "execution_fee_usd_per_day": 4.306638500783539,
+  "l2_blocks_per_day": 39398,
+  "l2_blocks_per_posting_tx": 2507.145454545455,
+  "posted_bytes_per_l2_block": 76.74874359104523
+ },
+ "starknet": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 34.142857142857146,
+  "blobs_per_day": 56.57142857142857,
+  "blob_fill_pct": 100.0,
+  "posted_mb_per_day": 7.414930285714285,
+  "blob_fee_usd_per_day": {
+   "mean": 0.2905974271899118,
+   "min": 0.08003944593325879,
+   "max": 0.7267045639796031
+  },
+  "execution_fee_usd_per_day": 6.612532428265988,
+  "l2_blocks_per_day": 51380,
+  "l2_blocks_per_posting_tx": 1504.8535564853555,
+  "posted_bytes_per_l2_block": 144.31549797030527
+ },
+ "taiko": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 225.42857142857142,
+  "blobs_per_day": 225.42857142857142,
+  "blob_fill_pct": 1.390413156178212,
+  "posted_mb_per_day": 0.41083057142857143,
+  "blob_fee_usd_per_day": {
+   "mean": 2.5061130457334118,
+   "min": 0.3755133254492057,
+   "max": 7.33945154422853
+  },
+  "execution_fee_usd_per_day": 41.99565259761744,
+  "l2_blocks_per_day": 43199,
+  "l2_blocks_per_posting_tx": 191.63054499366288,
+  "posted_bytes_per_l2_block": 9.510187074436248
+ },
+ "unichain": {
+  "days": 7,
+  "window": [
+   "2026-11-19T00:00:00.000Z",
+   "2026-11-26T00:00:00.000Z"
+  ],
+  "posting_txs_per_day": 191.28571428571428,
+  "blobs_per_day": 581.7142857142857,
+  "blob_fill_pct": 86.47816401333613,
+  "posted_mb_per_day": 65.93653428571429,
+  "blob_fee_usd_per_day": {
+   "mean": 11.47051788464105,
+   "min": 0.6530275215222776,
+   "max": 33.6623621580772
+  },
+  "execution_fee_usd_per_day": 17.128259139221992,
+  "l2_blocks_per_day": 86400,
+  "l2_blocks_per_posting_tx": 451.680358476475,
+  "posted_bytes_per_l2_block": 763.154332010582
+ }
+}

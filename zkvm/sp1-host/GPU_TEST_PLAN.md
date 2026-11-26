@@ -39,11 +39,11 @@ cd ~/hypercomp-zk/zkvm/sp1-host
 
    **No test may abort/panic the guest** (`exit_code != 0` is a failure for every test, including S2/S3/S7).
 5. Full run only: every Core and Compressed proof **verifies** (`PASS (100%)` in the report).
-6. Multi-mainnet set (`fixtures/multichain`, 64 fixtures = 8 chains x 2 batch sizes x 4 codecs:
-   Ethereum, Base, Optimism, Polygon PoS, Unichain, Taiko, Gnosis, Citrea): every fixture executes
-   with `exit_code 0` and a manifest-exact journal, and every `*_hc_updates_dict` payload equals its
-   `*_raw_zstd` / `*_raw_zstd_dict` payload. Reports: `sp1_multichain_execute_report.*` and, in a full
-   run, `sp1_multichain_gpu_report.*` (commit these too).
+6. Multi-mainnet set (`fixtures/multichain`, 28 fixtures = 7 chains x 4 codecs at each rollup's real batch size:
+   Base 161, OP Mainnet 63, Unichain 452, Taiko 192 L2 blocks; Ethereum 50, Polygon PoS 100, Gnosis 100 blocks as
+   activity references): every fixture executes with `exit_code 0` and a manifest-exact journal, and every
+   `*_hc_updates_dict` payload equals its `*_raw_zstd` / `*_raw_zstd_dict` payload. Reports:
+   `sp1_multichain_execute_report.*` and, in a full run, `sp1_multichain_gpu_report.*` (commit these too).
 
 ## 3. Report back
 - Commit the generated reports (do NOT commit `target/`):

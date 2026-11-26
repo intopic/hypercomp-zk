@@ -1,0 +1,85 @@
+{
+  "btc_usd": 59758.92,
+  "controls_no_hc": {
+    "dictionaries": "112 KB each, trained/taken only from the train half (zstd: trained; brotli: raw prefix of train samples)",
+    "full_payload_zstd19_dict_storage_bytes": 683109,
+    "full_payload_zstd19_dict_storage_saving_pct": 6.888091346881254,
+    "storage_part_bytes": {
+      "brotli11": 158481,
+      "brotli11_dict": 115092,
+      "zstd19": 157459,
+      "zstd19_dict": 108876
+    },
+    "storage_part_saving_vs_brotli11_pct": {
+      "brotli11_dict": 27.378045317735243,
+      "zstd19": 0.6448722559802111,
+      "zstd19_dict": 31.300282052738183
+    }
+  },
+  "entries_per_proof_mean": 327.26724137931035,
+  "proofs": 116,
+  "results": [
+    {
+      "brotli11_payload_bytes": 733643,
+      "hc_storage_vs_zstd19_dict_pct": -3.333149638120436,
+      "hc_variant_bytes": 686738,
+      "hc_variant_nodict_bytes": 731913,
+      "per_proof_saving_pct": {
+        "max": 16.088615524802098,
+        "median": 5.4592335733973485,
+        "min": 0.9972192923578538
+      },
+      "saved_bytes_per_proof": 808.7068965517242,
+      "saving_pct": 6.393436589730972,
+      "saving_pct_nodict": 0.23580951498207714,
+      "storage_part": {
+        "brotli11_bytes": 158481,
+        "hc_bytes": 112505
+      },
+      "test_proofs": 58,
+      "usd_per_day_at_sat_vb": {
+        "1": 4.953563700284483,
+        "10": 49.53563700284483,
+        "5": 24.767818501422415,
+        "50": 247.67818501422417
+      },
+      "value_byte_order": "as_stored"
+    },
+    {
+      "brotli11_payload_bytes": 733643,
+      "hc_storage_vs_zstd19_dict_pct": -2.658988206767332,
+      "hc_variant_bytes": 686004,
+      "hc_variant_nodict_bytes": 731686,
+      "per_proof_saving_pct": {
+        "max": 16.174041801924943,
+        "median": 5.478955007256891,
+        "min": 1.045162527567356
+      },
+      "saved_bytes_per_proof": 821.3620689655172,
+      "saving_pct": 6.4934852510008305,
+      "saving_pct_nodict": 0.26675099469360974,
+      "storage_part": {
+        "brotli11_bytes": 158481,
+        "hc_bytes": 111771
+      },
+      "test_proofs": 58,
+      "usd_per_day_at_sat_vb": {
+        "1": 5.031080292460343,
+        "10": 50.31080292460344,
+        "5": 25.15540146230172,
+        "50": 251.55401462301722
+      },
+      "value_byte_order": "reversed"
+    }
+  ],
+  "storage_deletions": 0,
+  "storage_entries_per_proof_mean": 55.827586206896555,
+  "test_heights": [
+    977493,
+    977708
+  ],
+  "train_heights": [
+    977279,
+    977489
+  ]
+}

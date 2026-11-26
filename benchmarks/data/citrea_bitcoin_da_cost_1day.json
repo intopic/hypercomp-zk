@@ -1,0 +1,26 @@
+{
+ "proof_reveals": 41,
+ "expected_proofs_from_node": 41,
+ "commitment_reveals": 44,
+ "expected_commitments_from_node": 44,
+ "random_prefix_matches_discarded": 7,
+ "proof_bytes": 537209,
+ "proof_tx_size_median": 11924,
+ "feerate_sat_vb": {
+  "median": 1.0,
+  "min": 1.0,
+  "max": 10.58
+ },
+ "fees_sat": {
+  "proofs": 217733,
+  "commitments": 41239,
+  "total": 258972
+ },
+ "btc_usd": 59758.920537549915,
+ "usd": {
+  "proofs": 130.11489045402354,
+  "commitments": 24.64398124048021,
+  "total": 154.75887169450377
+ },
+ "usd_per_mb_proof_data": 242.20534364469606
+}

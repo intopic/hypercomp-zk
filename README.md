@@ -6,32 +6,42 @@ Open-source, 100% lossless, `#![no_std]` RISC-V (`riscv32im`) decoder, cryptogra
 
 ```text
 hypercomp-zk/
-├── crates/hypercomp-decoder/      # Open-Source #![no_std], #![forbid(unsafe_code)], zero-panic RV32IM decoder (crates.io)
+├── crates/hypercomp-decoder/      # Open-source #![no_std], #![forbid(unsafe_code)], zero-panic RV32IM decoder (crates.io)
 ├── zkvm/
-│   ├── riscv-guest/               # Bare-metal riscv32im-unknown-none-elf ELF benchmark guest (200 KB)
-│   ├── sp1-guest/                 # Succinct SP1 v6 guest (107B journal, PrehashedDict, SHA-256 precompile patch)
-│   ├── sp1-host/                  # Reproducible SP1 v6 CUDA GPU benchmark & 7-test live security suite (+ v3 fixtures)
-│   ├── risc0-guest/               # RISC Zero guest committing SHA-256(blob), SHA-256(dict), validity & full delta commitment
-│   └── risc0-methods/             # Builds risc0-guest via risc0-build (`cargo build --release`), exposes ELF + image ID
-├── proto/hypercomp.proto          # Public gRPC interface contract for the Pro Sidecar (32B SHA-256 dict IDs)
-└── docs/
-    ├── MULTI_ROLLUP_MAINNET_BENCHMARK.md # Multi-chain mainnet audit (Citrea, Gnosis, Eth L1, Base, Optimism, Polygon, Taiko)
-    ├── WEEK2_MAINNET_BENCHMARK.md        # Real EVM & Starknet benchmarks (37,960 diffs, Brotli q=11, A2A Updates vs Deltas)
-    └── WEEK3_ZKVM_CYCLES.md              # Bare-metal RV32IM instruction counts vs Raw Zstd+Dict & ROI sensitivity matrix
+│   ├── riscv-guest/               # Bare-metal riscv32im-unknown-none-elf benchmark guest
+│   ├── sp1-guest/                 # Succinct SP1 v6 guest (107 B journal, PrehashedDict, SHA-256 precompile patch)
+│   ├── sp1-host/                  # SP1 v6 execute/GPU-prove harness, 7 live security tests, mainnet fixtures
+│   ├── risc0-guest/               # RISC Zero guest with the same 107 B journal
+│   └── risc0-methods/             # Builds risc0-guest via risc0-build, exposes ELF + image ID
+├── benchmarks/                    # Measured results (Nov 2026): data files, scripts, methodology
+├── proto/hypercomp.proto          # Public gRPC interface contract for the Pro sidecar
+└── docs/archive/                  # Superseded early benchmark write-ups (history only)
 ```
 
 > **Open-Core Model:** The verifier/decoder (`hypercomp-decoder`), zkVM guest integrations, wire specification, and gRPC interface in this repository are permanently open-source under **MIT OR Apache-2.0** for full auditability and zero vendor lock-in. The commercial **Pro Encoder Engine & Docker gRPC Sidecar** (`hypercomp-pro`) is licensed separately for rollups & RaaS operators.
 
-## Verified Mainnet & Bare-Metal RV32IM Highlights (Hardened `v3` Wire Format)
+## Measured Results (November 2026)
 
-- **Hardened `v3` Fresh Benchmarks (strict chronological train/test splits, zero data leakage, 32-byte SHA-256 `dict_id`, mandatory Zstd XXH64 checksum + `Frame_Content_Size`, unified `DecodeLimits::CONSENSUS`, and end-to-end `#![no_std]` + `op.apply(old) == new` verification):**
-  - **Gnosis EVM Mainnet (14 unseen 10-block batches, 7,005 net slots, vs. Brotli `q=11` & `Raw Zstd + Dict`):**
-    - Strictly apples-to-apples stateless **`HC Updates + Dict`** (`new_val` only): **`+17.7%` vs. Brotli `q=11`** (`+19.6%` at lvl 19) and **`+4.2%` incremental lift vs. `Raw Zstd + Dict`**.
-    - Delta-DA **`HC Deltas + Dict`** (`old_val -> new_val`): **`+19.8%` vs. Brotli `q=11`** (`+21.2%` at lvl 19), **`+24.2%` vs. Zstd**, and **`+6.6%` vs. `Raw Zstd + Dict`** ([`docs/WEEK2_MAINNET_BENCHMARK.md`](docs/WEEK2_MAINNET_BENCHMARK.md)).
-  - **Citrea Mainnet Sample (39 active unseen blocks, 157 net slots, 10.8 KB raw):** **`+23.0%` (`Updates`) / `+23.9%` (`Deltas`) vs. Brotli `q=11`** on uncompressed storage updates, and **`+6.0%` (`Updates`) / `+7.0%` (`Deltas`) vs. `Raw Zstd + Dict`** (rising to **`+10.9%`** on the collapsed 131-slot mega-batch; direct comparison against Citrea's internal Taproot witness format is planned for Milestone M3 — [`docs/MULTI_ROLLUP_MAINNET_BENCHMARK.md`](docs/MULTI_ROLLUP_MAINNET_BENCHMARK.md)).
-- **Pre-Hardening High-Density DeFi EVM Live RPC Snapshots (`H-6r` note):** On earlier live captures (prior to the `+28 B/batch` SHA-256 `dict_id` upgrade, a `< 0.1%` delta on multi-KB batches — see [`docs/MULTI_ROLLUP_MAINNET_BENCHMARK.md`](docs/MULTI_ROLLUP_MAINNET_BENCHMARK.md)), **Ethereum L1** (`+31.9%` vs. Zstd, `+24.9%` vs. `Raw Zstd + Dict`) and **Polygon PoS** (`+14.1%` vs. `Raw Zstd + Dict`) beat `Raw Zstd + Dict` **even without any dictionary** (`+14.1%` and `+9.8%`); **Base Mainnet** (`+29.5%` vs. Zstd) and **Optimism** (`+24.2%` vs. Zstd) added `+12.9%` and `+9.7%` over `Raw Zstd + Dict`.
-- **Bare-Metal RV32IM Instructions & Worst-Case zkVM Envelope (`N-1` / `N-2` / `OPT-1` / `OPT-2`):** On top of `Raw Zstd + Dict` (10-block EVM batch), stateless **`HC Updates + Dict`** executes **`-21,426` FEWER instructions (-0.2%)** and **`HC Deltas + Dict`** adds only **`+271,465` instructions (+2.8%)** while using **less guest RAM** (`514–527 KB` vs. `558 KB`). Unified `DecodeLimits::CONSENSUS` (`100k` slots, `8 MiB` pre-entropy, `8 MiB` Zstd window, `16 MiB` calibrated output @ `144 B/slot`, mandatory `Frame_Content_Size` with single `Vec::with_capacity`) bounds worst-case *cumulative* bump-allocator RAM to **`~50–51 MiB`**, well inside the benchmark guest's **96 MiB** heap (zkVM guests should provision `>= 96 MiB`), and worst-case HC structural decode to **`~226M` RV32IM instructions** (end-to-end GPU proving on SP1/RISC Zero is scoped to Milestone M2 — [`docs/WEEK3_ZKVM_CYCLES.md`](docs/WEEK3_ZKVM_CYCLES.md)).
-- **Mandatory zkVM Verifier Policy (`C-2r`):** Both `zkvm/sp1-guest` and `zkvm/risc0-guest` share the exact same **107-byte big-endian public journal**, hash the dictionary **once** (`PrehashedDict`), never abort on blob content (every decode error — including `MissingDictionary` / `DictionaryIdMismatch` — is committed as `is_valid = false` with its `error_code`, so blobs referencing unapproved dictionaries are provably invalid instead of unprovable), and require the L1 verifier contract to enforce `journal.dict_sha256 == APPROVED_CHAIN_DICT_SHA256` plus KZG (EIP-4844) or Bitcoin light-client DA blob inclusion.
+All figures are measured on real mainnet data with chronological train/test splits and are reproducible from
+[`benchmarks/`](benchmarks/README.md). Highlights:
+
+- **EVM state diffs at each rollup's real batch size** (Base 161, OP Mainnet 63, Unichain 452 L2 blocks): HC beats the
+  strongest do-it-yourself baseline, **Zstd + trained chain dictionary**, by **+3.9% to +8.2%** (`StateUpdates`) and
+  **+7.7% to +12.8%** (`StateDeltas`); against plain Zstd / Brotli q=11 by **+8% to +22%**.
+- **Citrea (Bitcoin):** Citrea's current DA payload uses hashed storage keys and 256 block hashes per proof; on it a
+  trained Zstd dictionary alone gives **+6.9%** and HC adds nothing. Citrea's measured DA bill is **~$155/day** (~$242/MB).
+- **Ethereum blob DA:** Base, the largest blob user, paid a mean **$269/day** for blobs over 7 days (range $19–$840/day).
+- **Every fixture is executed inside the real SP1 v6 zkVM in CI** with exact 107-byte journal parity; real GPU proving
+  has not yet been run.
+- **Decoder safety envelope:** unified `DecodeLimits::CONSENSUS` (100k slots, 8 MiB pre-entropy, 8 MiB Zstd window,
+  16 MiB output, mandatory `Frame_Content_Size` + XXH64) bounds worst-case cumulative bump-allocator RAM to ~50–51 MiB;
+  zkVM guests should provision >= 96 MiB.
+- **zkVM verifier policy (`C-2r`):** both guests commit every decode error as `is_valid = false` with its `error_code`
+  (blobs referencing unapproved dictionaries are provably invalid, never unprovable); the L1 verifier must enforce
+  `journal.dict_sha256 == APPROVED_CHAIN_DICT_SHA256` plus KZG (EIP-4844) or Bitcoin light-client DA inclusion.
+
+See [`benchmarks/README.md`](benchmarks/README.md) for where HC does **not** help and what switching from transaction
+data to state-diff DA implies for a rollup.
 
 ## Quick Start
 

@@ -688,7 +688,7 @@ async fn main() -> Result<()> {
     }
 
     // -----------------------------------------------------------------------
-    // WRITE MARKDOWN + JSON REPORTS (READY FOR WEEK3_ZKVM_CYCLES.md & GRANTS!)
+    // WRITE MARKDOWN + JSON REPORTS (READY FOR benchmarks/README.md & GRANTS)
     // -----------------------------------------------------------------------
     let report = FullReport {
         prover_backend: prover_backend.clone(),

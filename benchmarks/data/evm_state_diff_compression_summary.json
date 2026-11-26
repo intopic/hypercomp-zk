@@ -1,0 +1,1706 @@
+{
+ "format_version": 3,
+ "chains": {
+  "base": {
+   "batch_sizes": [
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 12.6,
+      "hc_deltas_vs_zstd": 15.8,
+      "hc_deltas_vs_zstd_dict": 12.8,
+      "hc_updates_vs_brotli11": 8.0,
+      "hc_updates_vs_zstd": 11.4,
+      "hc_updates_vs_zstd_dict": 8.2
+     },
+     "batch_blocks": 161,
+     "batches": [
+      {
+       "blocks": [
+        62702389,
+        62702549
+       ],
+       "brotli11": 284161,
+       "brotli6": 290760,
+       "hc_deltas_dict": 248384,
+       "hc_updates_dict": 260438,
+       "raw": 647028,
+       "slots": 9796,
+       "zstd": 294366,
+       "zstd_dict": 283346
+      },
+      {
+       "blocks": [
+        62702550,
+        62702710
+       ],
+       "brotli11": 268852,
+       "brotli6": 276426,
+       "hc_deltas_dict": 229558,
+       "hc_updates_dict": 244249,
+       "raw": 748403,
+       "slots": 11383,
+       "zstd": 280685,
+       "zstd_dict": 270035
+      },
+      {
+       "blocks": [
+        62702711,
+        62702871
+       ],
+       "brotli11": 302702,
+       "brotli6": 309648,
+       "hc_deltas_dict": 267114,
+       "hc_updates_dict": 278977,
+       "raw": 678990,
+       "slots": 10297,
+       "zstd": 313624,
+       "zstd_dict": 304196
+      },
+      {
+       "blocks": [
+        62702872,
+        62703032
+       ],
+       "brotli11": 266326,
+       "brotli6": 273098,
+       "hc_deltas_dict": 231780,
+       "hc_updates_dict": 244362,
+       "raw": 578437,
+       "slots": 8743,
+       "zstd": 276595,
+       "zstd_dict": 265341
+      },
+      {
+       "blocks": [
+        62703033,
+        62703193
+       ],
+       "brotli11": 290611,
+       "brotli6": 297873,
+       "hc_deltas_dict": 256507,
+       "hc_updates_dict": 269615,
+       "raw": 646924,
+       "slots": 9768,
+       "zstd": 301637,
+       "zstd_dict": 291966
+      },
+      {
+       "blocks": [
+        62703194,
+        62703354
+       ],
+       "brotli11": 288457,
+       "brotli6": 295762,
+       "hc_deltas_dict": 252950,
+       "hc_updates_dict": 265644,
+       "raw": 647988,
+       "slots": 9807,
+       "zstd": 299659,
+       "zstd_dict": 288449
+      },
+      {
+       "blocks": [
+        62703355,
+        62703515
+       ],
+       "brotli11": 316692,
+       "brotli6": 325055,
+       "hc_deltas_dict": 279618,
+       "hc_updates_dict": 293521,
+       "raw": 712713,
+       "slots": 10801,
+       "zstd": 329165,
+       "zstd_dict": 320741
+      },
+      {
+       "blocks": [
+        62703516,
+        62703676
+       ],
+       "brotli11": 276258,
+       "brotli6": 283031,
+       "hc_deltas_dict": 239028,
+       "hc_updates_dict": 253639,
+       "raw": 608190,
+       "slots": 9194,
+       "zstd": 286421,
+       "zstd_dict": 275220
+      }
+     ],
+     "bytes": {
+      "brotli11": 2294059,
+      "brotli6": 2351653,
+      "hc_deltas_dict": 2004939,
+      "hc_updates_dict": 2110445,
+      "raw": 5268673,
+      "zstd": 2382152,
+      "zstd_dict": 2299294
+     },
+     "num_batches": 8,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 14.6,
+       "mean": 12.6,
+       "min": 11.7
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 18.2,
+       "mean": 15.9,
+       "min": 14.8
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 15.0,
+       "mean": 12.8,
+       "min": 12.1
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 9.2,
+       "mean": 8.0,
+       "min": 7.2
+      },
+      "hc_updates_vs_zstd": {
+       "max": 13.0,
+       "mean": 11.4,
+       "min": 10.6
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 9.5,
+       "mean": 8.2,
+       "min": 7.7
+      }
+     },
+     "total_slots": 79789
+    }
+   ],
+   "chain": "Base Mainnet",
+   "dict_bytes": {
+    "deltas": 114688,
+    "raw": 114688,
+    "updates": 114688
+   },
+   "train_blocks": [
+    62702239,
+    62702388
+   ],
+   "zstd_level": 9
+  },
+  "optimism": {
+   "batch_sizes": [
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 19.7,
+      "hc_deltas_vs_zstd": 21.7,
+      "hc_deltas_vs_zstd_dict": 10.1,
+      "hc_updates_vs_brotli11": 16.2,
+      "hc_updates_vs_zstd": 18.3,
+      "hc_updates_vs_zstd_dict": 6.2
+     },
+     "batch_blocks": 63,
+     "batches": [
+      {
+       "blocks": [
+        160065606,
+        160065668
+       ],
+       "brotli11": 75981,
+       "brotli6": 77489,
+       "hc_deltas_dict": 60846,
+       "hc_updates_dict": 63450,
+       "raw": 172734,
+       "slots": 2610,
+       "zstd": 77899,
+       "zstd_dict": 67560
+      },
+      {
+       "blocks": [
+        160065669,
+        160065731
+       ],
+       "brotli11": 79135,
+       "brotli6": 80608,
+       "hc_deltas_dict": 63824,
+       "hc_updates_dict": 67009,
+       "raw": 176658,
+       "slots": 2670,
+       "zstd": 81093,
+       "zstd_dict": 71370
+      },
+      {
+       "blocks": [
+        160065732,
+        160065794
+       ],
+       "brotli11": 62125,
+       "brotli6": 63218,
+       "hc_deltas_dict": 50314,
+       "hc_updates_dict": 52472,
+       "raw": 135077,
+       "slots": 2044,
+       "zstd": 63456,
+       "zstd_dict": 55467
+      },
+      {
+       "blocks": [
+        160065795,
+        160065857
+       ],
+       "brotli11": 95206,
+       "brotli6": 97512,
+       "hc_deltas_dict": 79259,
+       "hc_updates_dict": 82587,
+       "raw": 218143,
+       "slots": 3287,
+       "zstd": 98508,
+       "zstd_dict": 88143
+      },
+      {
+       "blocks": [
+        160065858,
+        160065920
+       ],
+       "brotli11": 121553,
+       "brotli6": 123825,
+       "hc_deltas_dict": 95375,
+       "hc_updates_dict": 100176,
+       "raw": 253930,
+       "slots": 3862,
+       "zstd": 124550,
+       "zstd_dict": 107335
+      },
+      {
+       "blocks": [
+        160065921,
+        160065983
+       ],
+       "brotli11": 191481,
+       "brotli6": 195216,
+       "hc_deltas_dict": 157494,
+       "hc_updates_dict": 163882,
+       "raw": 415877,
+       "slots": 6350,
+       "zstd": 197260,
+       "zstd_dict": 176086
+      },
+      {
+       "blocks": [
+        160065984,
+        160066046
+       ],
+       "brotli11": 147564,
+       "brotli6": 149888,
+       "hc_deltas_dict": 116298,
+       "hc_updates_dict": 121783,
+       "raw": 289781,
+       "slots": 4458,
+       "zstd": 150769,
+       "zstd_dict": 128772
+      },
+      {
+       "blocks": [
+        160066047,
+        160066109
+       ],
+       "brotli11": 145022,
+       "brotli6": 147075,
+       "hc_deltas_dict": 113646,
+       "hc_updates_dict": 118060,
+       "raw": 287225,
+       "slots": 4426,
+       "zstd": 147987,
+       "zstd_dict": 125432
+      }
+     ],
+     "bytes": {
+      "brotli11": 918067,
+      "brotli6": 934831,
+      "hc_deltas_dict": 737056,
+      "hc_updates_dict": 769419,
+      "raw": 1949425,
+      "zstd": 941522,
+      "zstd_dict": 820165
+     },
+     "num_batches": 8,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 21.6,
+       "mean": 19.6,
+       "min": 16.7
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 23.4,
+       "mean": 21.6,
+       "min": 19.5
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 11.1,
+       "mean": 10.1,
+       "min": 9.3
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 18.6,
+       "mean": 16.1,
+       "min": 13.3
+      },
+      "hc_updates_vs_zstd": {
+       "max": 20.2,
+       "mean": 18.2,
+       "min": 16.2
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 6.9,
+       "mean": 6.1,
+       "min": 5.4
+      }
+     },
+     "total_slots": 29707
+    }
+   ],
+   "chain": "Optimism Mainnet",
+   "dict_bytes": {
+    "deltas": 114688,
+    "raw": 114688,
+    "updates": 114688
+   },
+   "train_blocks": [
+    160065456,
+    160065605
+   ],
+   "zstd_level": 9
+  },
+  "unichain": {
+   "batch_sizes": [
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 17.4,
+      "hc_deltas_vs_zstd": 19.5,
+      "hc_deltas_vs_zstd_dict": 7.7,
+      "hc_updates_vs_brotli11": 14.0,
+      "hc_updates_vs_zstd": 16.2,
+      "hc_updates_vs_zstd_dict": 3.9
+     },
+     "batch_blocks": 452,
+     "batches": [
+      {
+       "blocks": [
+        64980893,
+        64981344
+       ],
+       "brotli11": 6737,
+       "brotli6": 6811,
+       "hc_deltas_dict": 4687,
+       "hc_updates_dict": 5000,
+       "raw": 12064,
+       "slots": 176,
+       "zstd": 6840,
+       "zstd_dict": 4992
+      },
+      {
+       "blocks": [
+        64981345,
+        64981796
+       ],
+       "brotli11": 8544,
+       "brotli6": 8633,
+       "hc_deltas_dict": 6264,
+       "hc_updates_dict": 6508,
+       "raw": 16330,
+       "slots": 245,
+       "zstd": 8700,
+       "zstd_dict": 6673
+      },
+      {
+       "blocks": [
+        64981797,
+        64982248
+       ],
+       "brotli11": 23510,
+       "brotli6": 23854,
+       "hc_deltas_dict": 20592,
+       "hc_updates_dict": 21316,
+       "raw": 48563,
+       "slots": 742,
+       "zstd": 24218,
+       "zstd_dict": 22452
+      },
+      {
+       "blocks": [
+        64982249,
+        64982700
+       ],
+       "brotli11": 14313,
+       "brotli6": 14521,
+       "hc_deltas_dict": 12312,
+       "hc_updates_dict": 12843,
+       "raw": 26872,
+       "slots": 401,
+       "zstd": 14722,
+       "zstd_dict": 13413
+      }
+     ],
+     "bytes": {
+      "brotli11": 53104,
+      "brotli6": 53819,
+      "hc_deltas_dict": 43855,
+      "hc_updates_dict": 45667,
+      "raw": 103829,
+      "zstd": 54480,
+      "zstd_dict": 47530
+     },
+     "num_batches": 4,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 30.4,
+       "mean": 20.9,
+       "min": 12.4
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 31.5,
+       "mean": 22.7,
+       "min": 15.0
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 8.3,
+       "mean": 7.2,
+       "min": 6.1
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 25.8,
+       "mean": 17.3,
+       "min": 9.3
+      },
+      "hc_updates_vs_zstd": {
+       "max": 26.9,
+       "mean": 19.2,
+       "min": 12.0
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 5.1,
+       "mean": 2.9,
+       "min": -0.2
+      }
+     },
+     "total_slots": 1564
+    }
+   ],
+   "chain": "Unichain Mainnet",
+   "dict_bytes": {
+    "deltas": 18161,
+    "raw": 29663,
+    "updates": 20406
+   },
+   "train_blocks": [
+    64980743,
+    64980892
+   ],
+   "zstd_level": 9
+  },
+  "taiko": {
+   "batch_sizes": [
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": -0.3,
+      "hc_deltas_vs_zstd": -0.0,
+      "hc_deltas_vs_zstd_dict": 0.2,
+      "hc_updates_vs_brotli11": -0.0,
+      "hc_updates_vs_zstd": 0.2,
+      "hc_updates_vs_zstd_dict": 0.4
+     },
+     "batch_blocks": 192,
+     "batches": [
+      {
+       "blocks": [
+        14542495,
+        14542686
+       ],
+       "brotli11": 12581,
+       "brotli6": 12585,
+       "hc_deltas_dict": 12619,
+       "hc_updates_dict": 12580,
+       "raw": 12772,
+       "slots": 198,
+       "zstd": 12583,
+       "zstd_dict": 12608
+      },
+      {
+       "blocks": [
+        14542687,
+        14542878
+       ],
+       "brotli11": 12581,
+       "brotli6": 12585,
+       "hc_deltas_dict": 12615,
+       "hc_updates_dict": 12580,
+       "raw": 12772,
+       "slots": 198,
+       "zstd": 12583,
+       "zstd_dict": 12611
+      },
+      {
+       "blocks": [
+        14542879,
+        14543070
+       ],
+       "brotli11": 12542,
+       "brotli6": 12541,
+       "hc_deltas_dict": 12579,
+       "hc_updates_dict": 12577,
+       "raw": 12683,
+       "slots": 197,
+       "zstd": 12701,
+       "zstd_dict": 12737
+      },
+      {
+       "blocks": [
+        14543071,
+        14543262
+       ],
+       "brotli11": 12581,
+       "brotli6": 12584,
+       "hc_deltas_dict": 12618,
+       "hc_updates_dict": 12580,
+       "raw": 12772,
+       "slots": 198,
+       "zstd": 12583,
+       "zstd_dict": 12610
+      },
+      {
+       "blocks": [
+        14543263,
+        14543454
+       ],
+       "brotli11": 12644,
+       "brotli6": 12647,
+       "hc_deltas_dict": 12669,
+       "hc_updates_dict": 12639,
+       "raw": 12861,
+       "slots": 199,
+       "zstd": 12642,
+       "zstd_dict": 12670
+      }
+     ],
+     "bytes": {
+      "brotli11": 62929,
+      "brotli6": 62942,
+      "hc_deltas_dict": 63100,
+      "hc_updates_dict": 62956,
+      "raw": 63860,
+      "zstd": 63092,
+      "zstd_dict": 63236
+     },
+     "num_batches": 5,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": -0.2,
+       "mean": -0.3,
+       "min": -0.3
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 1.0,
+       "mean": -0.0,
+       "min": -0.3
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 1.2,
+       "mean": 0.2,
+       "min": -0.1
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 0.0,
+       "mean": -0.0,
+       "min": -0.3
+      },
+      "hc_updates_vs_zstd": {
+       "max": 1.0,
+       "mean": 0.2,
+       "min": 0.0
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 1.3,
+       "mean": 0.4,
+       "min": 0.2
+      }
+     },
+     "total_slots": 990
+    }
+   ],
+   "chain": "Taiko Alethia",
+   "dict_bytes": {
+    "deltas": 15258,
+    "raw": 20881,
+    "updates": 13450
+   },
+   "train_blocks": [
+    14542345,
+    14542494
+   ],
+   "zstd_level": 9
+  },
+  "ethereum": {
+   "batch_sizes": [
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 16.2,
+      "hc_deltas_vs_zstd": 18.4,
+      "hc_deltas_vs_zstd_dict": 12.3,
+      "hc_updates_vs_brotli11": 12.1,
+      "hc_updates_vs_zstd": 14.4,
+      "hc_updates_vs_zstd_dict": 8.0
+     },
+     "batch_blocks": 10,
+     "batches": [
+      {
+       "blocks": [
+        26501834,
+        26501843
+       ],
+       "brotli11": 166747,
+       "brotli6": 169358,
+       "hc_deltas_dict": 134308,
+       "hc_updates_dict": 142699,
+       "raw": 313060,
+       "slots": 4672,
+       "zstd": 170805,
+       "zstd_dict": 151291
+      },
+      {
+       "blocks": [
+        26501844,
+        26501853
+       ],
+       "brotli11": 194417,
+       "brotli6": 197735,
+       "hc_deltas_dict": 160102,
+       "hc_updates_dict": 169668,
+       "raw": 374738,
+       "slots": 5568,
+       "zstd": 199696,
+       "zstd_dict": 182265
+      },
+      {
+       "blocks": [
+        26501854,
+        26501863
+       ],
+       "brotli11": 187663,
+       "brotli6": 190753,
+       "hc_deltas_dict": 159368,
+       "hc_updates_dict": 166335,
+       "raw": 354055,
+       "slots": 5287,
+       "zstd": 192372,
+       "zstd_dict": 175993
+      },
+      {
+       "blocks": [
+        26501864,
+        26501873
+       ],
+       "brotli11": 182129,
+       "brotli6": 184838,
+       "hc_deltas_dict": 151167,
+       "hc_updates_dict": 157900,
+       "raw": 381770,
+       "slots": 5739,
+       "zstd": 187293,
+       "zstd_dict": 172597
+      },
+      {
+       "blocks": [
+        26501874,
+        26501883
+       ],
+       "brotli11": 195006,
+       "brotli6": 197833,
+       "hc_deltas_dict": 161728,
+       "hc_updates_dict": 169298,
+       "raw": 456630,
+       "slots": 6930,
+       "zstd": 199869,
+       "zstd_dict": 187704
+      },
+      {
+       "blocks": [
+        26501884,
+        26501893
+       ],
+       "brotli11": 230351,
+       "brotli6": 233870,
+       "hc_deltas_dict": 198900,
+       "hc_updates_dict": 207288,
+       "raw": 435284,
+       "slots": 6547,
+       "zstd": 235481,
+       "zstd_dict": 218445
+      },
+      {
+       "blocks": [
+        26501894,
+        26501903
+       ],
+       "brotli11": 267870,
+       "brotli6": 272209,
+       "hc_deltas_dict": 228633,
+       "hc_updates_dict": 239990,
+       "raw": 646770,
+       "slots": 9874,
+       "zstd": 276332,
+       "zstd_dict": 269499
+      },
+      {
+       "blocks": [
+        26501904,
+        26501913
+       ],
+       "brotli11": 180966,
+       "brotli6": 183656,
+       "hc_deltas_dict": 151844,
+       "hc_updates_dict": 158470,
+       "raw": 334491,
+       "slots": 4999,
+       "zstd": 185153,
+       "zstd_dict": 167268
+      },
+      {
+       "blocks": [
+        26501914,
+        26501923
+       ],
+       "brotli11": 199013,
+       "brotli6": 201844,
+       "hc_deltas_dict": 170722,
+       "hc_updates_dict": 178324,
+       "raw": 383454,
+       "slots": 5741,
+       "zstd": 203966,
+       "zstd_dict": 188179
+      },
+      {
+       "blocks": [
+        26501924,
+        26501933
+       ],
+       "brotli11": 221945,
+       "brotli6": 226023,
+       "hc_deltas_dict": 183281,
+       "hc_updates_dict": 193364,
+       "raw": 574720,
+       "slots": 8720,
+       "zstd": 229912,
+       "zstd_dict": 222302
+      },
+      {
+       "blocks": [
+        26501934,
+        26501943
+       ],
+       "brotli11": 177690,
+       "brotli6": 180384,
+       "hc_deltas_dict": 147500,
+       "hc_updates_dict": 155388,
+       "raw": 355452,
+       "slots": 5312,
+       "zstd": 182029,
+       "zstd_dict": 166849
+      },
+      {
+       "blocks": [
+        26501944,
+        26501953
+       ],
+       "brotli11": 214767,
+       "brotli6": 218084,
+       "hc_deltas_dict": 181941,
+       "hc_updates_dict": 190753,
+       "raw": 438776,
+       "slots": 6603,
+       "zstd": 220633,
+       "zstd_dict": 205825
+      },
+      {
+       "blocks": [
+        26501954,
+        26501963
+       ],
+       "brotli11": 188744,
+       "brotli6": 191736,
+       "hc_deltas_dict": 155394,
+       "hc_updates_dict": 163818,
+       "raw": 435956,
+       "slots": 6571,
+       "zstd": 194143,
+       "zstd_dict": 180904
+      },
+      {
+       "blocks": [
+        26501964,
+        26501973
+       ],
+       "brotli11": 207572,
+       "brotli6": 210679,
+       "hc_deltas_dict": 174071,
+       "hc_updates_dict": 182189,
+       "raw": 468737,
+       "slots": 7087,
+       "zstd": 212792,
+       "zstd_dict": 201748
+      }
+     ],
+     "bytes": {
+      "brotli11": 2814880,
+      "brotli6": 2859002,
+      "hc_deltas_dict": 2358959,
+      "hc_updates_dict": 2475484,
+      "raw": 5953893,
+      "zstd": 2890476,
+      "zstd_dict": 2690869
+     },
+     "num_batches": 14,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 19.5,
+       "mean": 16.3,
+       "min": 13.7
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 21.4,
+       "mean": 18.5,
+       "min": 15.5
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 17.6,
+       "mean": 12.2,
+       "min": 8.9
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 14.4,
+       "mean": 12.2,
+       "min": 10.0
+      },
+      "hc_updates_vs_zstd": {
+       "max": 16.5,
+       "mean": 14.4,
+       "min": 12.0
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 13.0,
+       "mean": 7.8,
+       "min": 5.1
+      }
+     },
+     "total_slots": 89650
+    },
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 8.8,
+      "hc_deltas_vs_zstd": 11.5,
+      "hc_deltas_vs_zstd_dict": 12.1,
+      "hc_updates_vs_brotli11": 5.5,
+      "hc_updates_vs_zstd": 8.2,
+      "hc_updates_vs_zstd_dict": 8.8
+     },
+     "batch_blocks": 50,
+     "batches": [
+      {
+       "blocks": [
+        26501834,
+        26501883
+       ],
+       "brotli11": 670063,
+       "brotli6": 682939,
+       "hc_deltas_dict": 609680,
+       "hc_updates_dict": 633931,
+       "raw": 1437432,
+       "slots": 21767,
+       "zstd": 688471,
+       "zstd_dict": 692108
+      },
+      {
+       "blocks": [
+        26501884,
+        26501933
+       ],
+       "brotli11": 825609,
+       "brotli6": 842421,
+       "hc_deltas_dict": 754431,
+       "hc_updates_dict": 780580,
+       "raw": 1895363,
+       "slots": 28887,
+       "zstd": 851758,
+       "zstd_dict": 857595
+      },
+      {
+       "blocks": [
+        26501934,
+        26501983
+       ],
+       "brotli11": 718539,
+       "brotli6": 732876,
+       "hc_deltas_dict": 654721,
+       "hc_updates_dict": 678636,
+       "raw": 1605347,
+       "slots": 24357,
+       "zstd": 740622,
+       "zstd_dict": 746243
+      }
+     ],
+     "bytes": {
+      "brotli11": 2214211,
+      "brotli6": 2258236,
+      "hc_deltas_dict": 2018832,
+      "hc_updates_dict": 2093147,
+      "raw": 4938142,
+      "zstd": 2280851,
+      "zstd_dict": 2295946
+     },
+     "num_batches": 3,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 9.0,
+       "mean": 8.8,
+       "min": 8.6
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 11.6,
+       "mean": 11.5,
+       "min": 11.4
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 12.3,
+       "mean": 12.1,
+       "min": 11.9
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 5.6,
+       "mean": 5.5,
+       "min": 5.4
+      },
+      "hc_updates_vs_zstd": {
+       "max": 8.4,
+       "mean": 8.2,
+       "min": 7.9
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 9.1,
+       "mean": 8.8,
+       "min": 8.4
+      }
+     },
+     "total_slots": 75011
+    }
+   ],
+   "chain": "Ethereum L1",
+   "dict_bytes": {
+    "deltas": 114688,
+    "raw": 114688,
+    "updates": 114688
+   },
+   "train_blocks": [
+    26501734,
+    26501833
+   ],
+   "zstd_level": 9
+  },
+  "polygon": {
+   "batch_sizes": [
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 13.3,
+      "hc_deltas_vs_zstd": 15.7,
+      "hc_deltas_vs_zstd_dict": 9.4,
+      "hc_updates_vs_brotli11": 11.3,
+      "hc_updates_vs_zstd": 13.8,
+      "hc_updates_vs_zstd_dict": 7.4
+     },
+     "batch_blocks": 10,
+     "batches": [
+      {
+       "blocks": [
+        98014971,
+        98014980
+       ],
+       "brotli11": 141312,
+       "brotli6": 143626,
+       "hc_deltas_dict": 122998,
+       "hc_updates_dict": 126102,
+       "raw": 249311,
+       "slots": 3807,
+       "zstd": 143672,
+       "zstd_dict": 132877
+      },
+      {
+       "blocks": [
+        98014981,
+        98014990
+       ],
+       "brotli11": 127498,
+       "brotli6": 129856,
+       "hc_deltas_dict": 110678,
+       "hc_updates_dict": 113536,
+       "raw": 225991,
+       "slots": 3437,
+       "zstd": 130119,
+       "zstd_dict": 119879
+      },
+      {
+       "blocks": [
+        98014991,
+        98015000
+       ],
+       "brotli11": 114167,
+       "brotli6": 115842,
+       "hc_deltas_dict": 98032,
+       "hc_updates_dict": 100352,
+       "raw": 201935,
+       "slots": 3074,
+       "zstd": 116099,
+       "zstd_dict": 105861
+      },
+      {
+       "blocks": [
+        98015001,
+        98015010
+       ],
+       "brotli11": 112340,
+       "brotli6": 114177,
+       "hc_deltas_dict": 97288,
+       "hc_updates_dict": 99856,
+       "raw": 198980,
+       "slots": 3029,
+       "zstd": 114421,
+       "zstd_dict": 104921
+      },
+      {
+       "blocks": [
+        98015011,
+        98015020
+       ],
+       "brotli11": 119937,
+       "brotli6": 122502,
+       "hc_deltas_dict": 104768,
+       "hc_updates_dict": 107240,
+       "raw": 215703,
+       "slots": 3260,
+       "zstd": 122674,
+       "zstd_dict": 112875
+      },
+      {
+       "blocks": [
+        98015021,
+        98015030
+       ],
+       "brotli11": 146091,
+       "brotli6": 149265,
+       "hc_deltas_dict": 126213,
+       "hc_updates_dict": 129409,
+       "raw": 276907,
+       "slots": 4206,
+       "zstd": 151022,
+       "zstd_dict": 138758
+      },
+      {
+       "blocks": [
+        98015031,
+        98015040
+       ],
+       "brotli11": 192643,
+       "brotli6": 195196,
+       "hc_deltas_dict": 171313,
+       "hc_updates_dict": 174128,
+       "raw": 360756,
+       "slots": 5466,
+       "zstd": 195964,
+       "zstd_dict": 183466
+      },
+      {
+       "blocks": [
+        98015041,
+        98015050
+       ],
+       "brotli11": 143805,
+       "brotli6": 147281,
+       "hc_deltas_dict": 119051,
+       "hc_updates_dict": 121733,
+       "raw": 400423,
+       "slots": 6163,
+       "zstd": 151947,
+       "zstd_dict": 140220
+      },
+      {
+       "blocks": [
+        98015051,
+        98015060
+       ],
+       "brotli11": 141704,
+       "brotli6": 145326,
+       "hc_deltas_dict": 116057,
+       "hc_updates_dict": 118821,
+       "raw": 392870,
+       "slots": 6042,
+       "zstd": 149430,
+       "zstd_dict": 136900
+      },
+      {
+       "blocks": [
+        98015061,
+        98015070
+       ],
+       "brotli11": 142006,
+       "brotli6": 145318,
+       "hc_deltas_dict": 123470,
+       "hc_updates_dict": 126763,
+       "raw": 262488,
+       "slots": 4007,
+       "zstd": 147049,
+       "zstd_dict": 135328
+      },
+      {
+       "blocks": [
+        98015071,
+        98015080
+       ],
+       "brotli11": 198178,
+       "brotli6": 200339,
+       "hc_deltas_dict": 178773,
+       "hc_updates_dict": 181911,
+       "raw": 366787,
+       "slots": 5635,
+       "zstd": 200950,
+       "zstd_dict": 192252
+      },
+      {
+       "blocks": [
+        98015081,
+        98015090
+       ],
+       "brotli11": 149391,
+       "brotli6": 152805,
+       "hc_deltas_dict": 124684,
+       "hc_updates_dict": 127097,
+       "raw": 460436,
+       "slots": 7101,
+       "zstd": 157599,
+       "zstd_dict": 147680
+      },
+      {
+       "blocks": [
+        98015091,
+        98015100
+       ],
+       "brotli11": 196415,
+       "brotli6": 199822,
+       "hc_deltas_dict": 175465,
+       "hc_updates_dict": 178332,
+       "raw": 428994,
+       "slots": 6624,
+       "zstd": 202388,
+       "zstd_dict": 193249
+      },
+      {
+       "blocks": [
+        98015101,
+        98015110
+       ],
+       "brotli11": 142395,
+       "brotli6": 144363,
+       "hc_deltas_dict": 124800,
+       "hc_updates_dict": 128295,
+       "raw": 253988,
+       "slots": 3876,
+       "zstd": 144753,
+       "zstd_dict": 135207
+      }
+     ],
+     "bytes": {
+      "brotli11": 2067882,
+      "brotli6": 2105718,
+      "hc_deltas_dict": 1793590,
+      "hc_updates_dict": 1833575,
+      "raw": 4295569,
+      "zstd": 2128087,
+      "zstd_dict": 1979473
+     },
+     "num_batches": 14,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 18.1,
+       "mean": 13.5,
+       "min": 9.8
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 22.3,
+       "mean": 15.9,
+       "min": 11.0
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 15.6,
+       "mean": 9.4,
+       "min": 6.6
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 16.1,
+       "mean": 11.5,
+       "min": 8.2
+      },
+      "hc_updates_vs_zstd": {
+       "max": 20.5,
+       "mean": 14.0,
+       "min": 9.5
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 13.9,
+       "mean": 7.3,
+       "min": 4.8
+      }
+     },
+     "total_slots": 65727
+    },
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 5.7,
+      "hc_deltas_vs_zstd": 9.1,
+      "hc_deltas_vs_zstd_dict": 9.4,
+      "hc_updates_vs_brotli11": 4.1,
+      "hc_updates_vs_zstd": 7.6,
+      "hc_updates_vs_zstd_dict": 7.9
+     },
+     "batch_blocks": 100,
+     "batches": [
+      {
+       "blocks": [
+        98014971,
+        98015070
+       ],
+       "brotli11": 1075321,
+       "brotli6": 1102469,
+       "hc_deltas_dict": 1013099,
+       "hc_updates_dict": 1031110,
+       "raw": 2297121,
+       "slots": 35326,
+       "zstd": 1114097,
+       "zstd_dict": 1111109
+      },
+      {
+       "blocks": [
+        98015071,
+        98015170
+       ],
+       "brotli11": 1286608,
+       "brotli6": 1315850,
+       "hc_deltas_dict": 1213902,
+       "hc_updates_dict": 1232903,
+       "raw": 2964137,
+       "slots": 45875,
+       "zstd": 1335885,
+       "zstd_dict": 1346780
+      }
+     ],
+     "bytes": {
+      "brotli11": 2361929,
+      "brotli6": 2418319,
+      "hc_deltas_dict": 2227001,
+      "hc_updates_dict": 2264013,
+      "raw": 5261258,
+      "zstd": 2449982,
+      "zstd_dict": 2457889
+     },
+     "num_batches": 2,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 5.8,
+       "mean": 5.7,
+       "min": 5.7
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 9.1,
+       "mean": 9.1,
+       "min": 9.1
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 9.9,
+       "mean": 9.3,
+       "min": 8.8
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 4.2,
+       "mean": 4.1,
+       "min": 4.1
+      },
+      "hc_updates_vs_zstd": {
+       "max": 7.7,
+       "mean": 7.6,
+       "min": 7.4
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 8.5,
+       "mean": 7.8,
+       "min": 7.2
+      }
+     },
+     "total_slots": 81201
+    }
+   ],
+   "chain": "Polygon PoS",
+   "dict_bytes": {
+    "deltas": 114688,
+    "raw": 114688,
+    "updates": 114688
+   },
+   "train_blocks": [
+    98014821,
+    98014970
+   ],
+   "zstd_level": 9
+  },
+  "gnosis": {
+   "batch_sizes": [
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 21.7,
+      "hc_deltas_vs_zstd": 27.4,
+      "hc_deltas_vs_zstd_dict": 0.7,
+      "hc_updates_vs_brotli11": 23.1,
+      "hc_updates_vs_zstd": 28.7,
+      "hc_updates_vs_zstd_dict": 2.5
+     },
+     "batch_blocks": 10,
+     "batches": [
+      {
+       "blocks": [
+        49484823,
+        49484832
+       ],
+       "brotli11": 22052,
+       "brotli6": 23216,
+       "hc_deltas_dict": 15680,
+       "hc_updates_dict": 15519,
+       "raw": 48642,
+       "slots": 718,
+       "zstd": 23499,
+       "zstd_dict": 15841
+      },
+      {
+       "blocks": [
+        49484833,
+        49484842
+       ],
+       "brotli11": 17045,
+       "brotli6": 18094,
+       "hc_deltas_dict": 12533,
+       "hc_updates_dict": 12188,
+       "raw": 38784,
+       "slots": 571,
+       "zstd": 18363,
+       "zstd_dict": 12441
+      },
+      {
+       "blocks": [
+        49484843,
+        49484852
+       ],
+       "brotli11": 12993,
+       "brotli6": 13931,
+       "hc_deltas_dict": 9813,
+       "hc_updates_dict": 9591,
+       "raw": 27008,
+       "slots": 397,
+       "zstd": 14108,
+       "zstd_dict": 9865
+      },
+      {
+       "blocks": [
+        49484853,
+        49484862
+       ],
+       "brotli11": 16408,
+       "brotli6": 17630,
+       "hc_deltas_dict": 12827,
+       "hc_updates_dict": 12349,
+       "raw": 35842,
+       "slots": 531,
+       "zstd": 17790,
+       "zstd_dict": 12767
+      },
+      {
+       "blocks": [
+        49484863,
+        49484872
+       ],
+       "brotli11": 16590,
+       "brotli6": 17747,
+       "hc_deltas_dict": 13483,
+       "hc_updates_dict": 12764,
+       "raw": 35208,
+       "slots": 522,
+       "zstd": 18007,
+       "zstd_dict": 13104
+      },
+      {
+       "blocks": [
+        49484873,
+        49484882
+       ],
+       "brotli11": 24755,
+       "brotli6": 26061,
+       "hc_deltas_dict": 21442,
+       "hc_updates_dict": 20976,
+       "raw": 51729,
+       "slots": 779,
+       "zstd": 26600,
+       "zstd_dict": 21849
+      },
+      {
+       "blocks": [
+        49484883,
+        49484892
+       ],
+       "brotli11": 24277,
+       "brotli6": 25790,
+       "hc_deltas_dict": 21077,
+       "hc_updates_dict": 20535,
+       "raw": 48684,
+       "slots": 731,
+       "zstd": 26316,
+       "zstd_dict": 21022
+      },
+      {
+       "blocks": [
+        49484893,
+        49484902
+       ],
+       "brotli11": 16176,
+       "brotli6": 17269,
+       "hc_deltas_dict": 12821,
+       "hc_updates_dict": 12494,
+       "raw": 33466,
+       "slots": 494,
+       "zstd": 17540,
+       "zstd_dict": 12745
+      },
+      {
+       "blocks": [
+        49484903,
+        49484912
+       ],
+       "brotli11": 21401,
+       "brotli6": 22740,
+       "hc_deltas_dict": 16249,
+       "hc_updates_dict": 16284,
+       "raw": 43808,
+       "slots": 647,
+       "zstd": 23096,
+       "zstd_dict": 16504
+      },
+      {
+       "blocks": [
+        49484913,
+        49484922
+       ],
+       "brotli11": 18907,
+       "brotli6": 20055,
+       "hc_deltas_dict": 15142,
+       "hc_updates_dict": 14872,
+       "raw": 38772,
+       "slots": 573,
+       "zstd": 20431,
+       "zstd_dict": 15266
+      },
+      {
+       "blocks": [
+        49484923,
+        49484932
+       ],
+       "brotli11": 18072,
+       "brotli6": 19205,
+       "hc_deltas_dict": 13237,
+       "hc_updates_dict": 13016,
+       "raw": 37745,
+       "slots": 555,
+       "zstd": 19578,
+       "zstd_dict": 13174
+      },
+      {
+       "blocks": [
+        49484933,
+        49484942
+       ],
+       "brotli11": 24600,
+       "brotli6": 25933,
+       "hc_deltas_dict": 18172,
+       "hc_updates_dict": 18508,
+       "raw": 49704,
+       "slots": 736,
+       "zstd": 26524,
+       "zstd_dict": 19055
+      },
+      {
+       "blocks": [
+        49484943,
+        49484952
+       ],
+       "brotli11": 16959,
+       "brotli6": 17974,
+       "hc_deltas_dict": 12063,
+       "hc_updates_dict": 12029,
+       "raw": 35877,
+       "slots": 527,
+       "zstd": 18173,
+       "zstd_dict": 12116
+      },
+      {
+       "blocks": [
+        49484953,
+        49484962
+       ],
+       "brotli11": 22093,
+       "brotli6": 23419,
+       "hc_deltas_dict": 18803,
+       "hc_updates_dict": 18310,
+       "raw": 47957,
+       "slots": 715,
+       "zstd": 23842,
+       "zstd_dict": 19062
+      }
+     ],
+     "bytes": {
+      "brotli11": 272328,
+      "brotli6": 289064,
+      "hc_deltas_dict": 213342,
+      "hc_updates_dict": 209435,
+      "raw": 573226,
+      "zstd": 293867,
+      "zstd_dict": 214811
+     },
+     "num_batches": 14,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 28.9,
+       "mean": 22.0,
+       "min": 13.2
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 33.6,
+       "mean": 27.8,
+       "min": 19.4
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 4.6,
+       "mean": 0.5,
+       "min": -2.9
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 29.6,
+       "mean": 23.6,
+       "min": 15.3
+      },
+      "hc_updates_vs_zstd": {
+       "max": 34.0,
+       "mean": 29.2,
+       "min": 21.1
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 4.0,
+       "mean": 2.4,
+       "min": 0.7
+      }
+     },
+     "total_slots": 8496
+    },
+    {
+     "aggregate_saving_pct": {
+      "hc_deltas_vs_brotli11": 8.8,
+      "hc_deltas_vs_zstd": 15.1,
+      "hc_deltas_vs_zstd_dict": 4.6,
+      "hc_updates_vs_brotli11": 9.1,
+      "hc_updates_vs_zstd": 15.3,
+      "hc_updates_vs_zstd_dict": 4.8
+     },
+     "batch_blocks": 100,
+     "batches": [
+      {
+       "blocks": [
+        49484823,
+        49484922
+       ],
+       "brotli11": 92790,
+       "brotli6": 97922,
+       "hc_deltas_dict": 85070,
+       "hc_updates_dict": 84761,
+       "raw": 201308,
+       "slots": 3045,
+       "zstd": 99756,
+       "zstd_dict": 88180
+      },
+      {
+       "blocks": [
+        49484923,
+        49485022
+       ],
+       "brotli11": 103484,
+       "brotli6": 108882,
+       "hc_deltas_dict": 93878,
+       "hc_updates_dict": 93750,
+       "raw": 235747,
+       "slots": 3523,
+       "zstd": 110958,
+       "zstd_dict": 99320
+      }
+     ],
+     "bytes": {
+      "brotli11": 196274,
+      "brotli6": 206804,
+      "hc_deltas_dict": 178948,
+      "hc_updates_dict": 178511,
+      "raw": 437055,
+      "zstd": 210714,
+      "zstd_dict": 187500
+     },
+     "num_batches": 2,
+     "per_batch_saving_pct": {
+      "hc_deltas_vs_brotli11": {
+       "max": 9.3,
+       "mean": 8.8,
+       "min": 8.3
+      },
+      "hc_deltas_vs_zstd": {
+       "max": 15.4,
+       "mean": 15.1,
+       "min": 14.7
+      },
+      "hc_deltas_vs_zstd_dict": {
+       "max": 5.5,
+       "mean": 4.5,
+       "min": 3.5
+      },
+      "hc_updates_vs_brotli11": {
+       "max": 9.4,
+       "mean": 9.0,
+       "min": 8.7
+      },
+      "hc_updates_vs_zstd": {
+       "max": 15.5,
+       "mean": 15.3,
+       "min": 15.0
+      },
+      "hc_updates_vs_zstd_dict": {
+       "max": 5.6,
+       "mean": 4.7,
+       "min": 3.9
+      }
+     },
+     "total_slots": 6568
+    }
+   ],
+   "chain": "Gnosis Mainnet",
+   "dict_bytes": {
+    "deltas": 114688,
+    "raw": 114688,
+    "updates": 114688
+   },
+   "train_blocks": [
+    49484673,
+    49484822
+   ],
+   "zstd_level": 9
+  }
+ }
+}
