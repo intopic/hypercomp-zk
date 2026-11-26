@@ -7,7 +7,7 @@ Open-source, 100% deterministic, zero-panic, `#![no_std]` (`#![forbid(unsafe_cod
 - **`#![no_std]` + `alloc` only** — zero C dependencies (`ruzstd` pure-Rust Zstd optional via `zstd-nostd` feature).
 - **`#![forbid(unsafe_code)]`** — zero `unsafe` blocks anywhere in the crate.
 - **32-bit RV32IM ↔ 64-bit x86_64 bit-exact parity** — all counts & indices are `u32`-bounded; U256/Rhind arithmetic uses native 32-bit limbs (`POW10` compile-time table).
-- **Zero panics & OOM-bomb protection** — canonical scalar primitives (LEB128 varints, Rhind U256, `DeltaOp`), strict ascending unique `(address, slot)` enforcement, trailing-byte rejection, remaining-byte RLE guards, mandatory Zstd XXH64 checksum, SHA-256 32-byte dictionary pinning, and `DecodeLimits::zkvm()`.
+- **Zero panics & OOM-bomb protection** — canonical scalar primitives (LEB128 varints, Rhind U256, `DeltaOp`), strict ascending unique `(address, slot)` enforcement, trailing-byte rejection, remaining-byte RLE guards, mandatory Zstd `Frame_Content_Size` + XXH64 checksum, SHA-256 32-byte dictionary pinning (`PrehashedDict`), and unified `DecodeLimits::CONSENSUS` (`FORMAT_VERSION = 3`).
 
 ## Quick Usage (`#![no_std]` / zkVM Guest)
 
@@ -18,14 +18,29 @@ hypercomp-decoder = { version = "0.2", default-features = false, features = ["zs
 
 ```rust,no_run
 use hypercomp_decoder::{
-    commit_state_deltas_sha256, decompress_state_deltas_with_limits, sha256_bytes, DecodeLimits,
+    commit_state_deltas_sha256, decompress_state_deltas_with_prehashed_dict, sha256_bytes,
+    DecodeLimits, PrehashedDict,
 };
 
-pub fn verify_blob(blob: &[u8], trained_dict: Option<&[u8]>) -> ([u8; 32], bool, [u8; 32]) {
-    let blob_hash = sha256_bytes(blob);
-    match decompress_state_deltas_with_limits(blob, trained_dict, DecodeLimits::zkvm()) {
-        Ok(contracts) => (blob_hash, true, commit_state_deltas_sha256(&contracts)),
-        Err(_) => (blob_hash, false, [0u8; 32]),
+/// Returns `(blob_sha256, dict_sha256, is_valid, error_code, deltas_sha256)`.
+/// L1 verifier contracts MUST check `dict_sha256 == APPROVED_CHAIN_DICT_SHA256` (never `[0u8; 32]`
+/// on a dictionary-enabled chain) and bind `blob_sha256` to the DA layer commitment.
+pub fn verify_blob(
+    blob: &[u8],
+    trained_dict: Option<&[u8]>,
+) -> ([u8; 32], [u8; 32], bool, u8, [u8; 32]) {
+    let blob_sha256 = sha256_bytes(blob);
+    let prehashed = trained_dict.map(PrehashedDict::new);
+    let dict_sha256 = prehashed.map_or([0u8; 32], |d| d.id());
+    match decompress_state_deltas_with_prehashed_dict(blob, prehashed, DecodeLimits::CONSENSUS) {
+        Ok(contracts) => (
+            blob_sha256,
+            dict_sha256,
+            true,
+            0,
+            commit_state_deltas_sha256(&contracts),
+        ),
+        Err(err) => (blob_sha256, dict_sha256, false, err.code(), [0u8; 32]),
     }
 }
 ```

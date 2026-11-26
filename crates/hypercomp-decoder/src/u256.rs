@@ -106,6 +106,21 @@ impl U256 {
         self.minimal_be_slice().len()
     }
 
+    /// Returns the number of trailing binary zero bits (`0..=256`; `256` iff `self.is_zero()`).
+    #[inline]
+    pub fn trailing_zero_bits(&self) -> u32 {
+        let mut tz = 0u32;
+        for &b in self.0.iter().rev() {
+            if b == 0 {
+                tz += 8;
+            } else {
+                tz += b.trailing_zeros();
+                break;
+            }
+        }
+        tz
+    }
+
     /// Returns `Some(u64)` if the value fits in 64 bits.
     #[inline]
     pub fn to_u64_exact(&self) -> Option<u64> {

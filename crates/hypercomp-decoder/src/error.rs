@@ -72,8 +72,14 @@ impl HyperCompError {
         }
     }
 
-    /// Returns `true` when the error indicates a prover-supplied dictionary witness mismatch
-    /// (`MissingDictionary` or `DictionaryIdMismatch`) rather than an intrinsic wire defect (`C-2r`).
+    /// Returns `true` when the error indicates a dictionary-binding mismatch
+    /// (`MissingDictionary` = code `17`, `DictionaryIdMismatch` = code `18`) rather than a
+    /// structural/arithmetic payload defect (`C-2r` / `R3-2`).
+    ///
+    /// Note (`R3-2` Total Provability): production zkVM guests commit **every** error with
+    /// `(is_valid = false, error_code = err.code())` so blobs referencing unapproved dictionaries
+    /// remain provably invalid; L1 verifiers prevent witness-withholding attacks by enforcing
+    /// `journal.dict_sha256 == APPROVED_CHAIN_DICT_SHA256`.
     #[inline]
     pub const fn is_prover_witness_error(&self) -> bool {
         matches!(

@@ -741,30 +741,46 @@ pub fn decode_state_transitions_raw(
         return Err(HyperCompError::TrailingBytes(pre.len() - pos));
     }
 
-    let mut last_val: BTreeMap<([u8; 20], [u8; 32]), U256> = BTreeMap::new();
     let mut diffs = Vec::with_capacity(n);
-    let mut exp_i = 0usize;
+    if explicit_old_count == n {
+        // Fast path (`OPT-2`): zero causal back-references in `old_known_bitmap`, so skip
+        // allocating and populating `BTreeMap` completely (eliminates ~5-8 MiB of bump-allocator
+        // node allocations on max-size unique-slot transition batches).
+        for i in 0..n {
+            let old_val = explicit_olds[i];
+            let new_val = ops[i].apply(old_val)?;
+            diffs.push(StateDiff {
+                address: addrs[i],
+                slot: slots[i],
+                old_val,
+                new_val,
+            });
+        }
+    } else {
+        let mut last_val: BTreeMap<([u8; 20], [u8; 32]), U256> = BTreeMap::new();
+        let mut exp_i = 0usize;
 
-    for i in 0..n {
-        let key = (addrs[i], slots[i]);
-        let is_known = ((old_known_bitmap[i >> 3] >> (i & 7)) & 1) != 0;
-        let old_val = if is_known {
-            *last_val
-                .get(&key)
-                .ok_or(HyperCompError::NonCanonicalEncoding)?
-        } else {
-            let v = explicit_olds[exp_i];
-            exp_i += 1;
-            v
-        };
-        let new_val = ops[i].apply(old_val)?;
-        last_val.insert(key, new_val);
-        diffs.push(StateDiff {
-            address: addrs[i],
-            slot: slots[i],
-            old_val,
-            new_val,
-        });
+        for i in 0..n {
+            let key = (addrs[i], slots[i]);
+            let is_known = ((old_known_bitmap[i >> 3] >> (i & 7)) & 1) != 0;
+            let old_val = if is_known {
+                *last_val
+                    .get(&key)
+                    .ok_or(HyperCompError::NonCanonicalEncoding)?
+            } else {
+                let v = explicit_olds[exp_i];
+                exp_i += 1;
+                v
+            };
+            let new_val = ops[i].apply(old_val)?;
+            last_val.insert(key, new_val);
+            diffs.push(StateDiff {
+                address: addrs[i],
+                slot: slots[i],
+                old_val,
+                new_val,
+            });
+        }
     }
     Ok(diffs)
 }

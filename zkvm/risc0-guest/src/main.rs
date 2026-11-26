@@ -1,36 +1,92 @@
 //! RISC Zero zkVM Guest Program for Al-Samawal Rollup HyperCompressor (`FORMAT_VERSION = 3`).
 //!
 //! Build with RISC Zero toolchain:
-//!   `cd zkvm/risc0-guest && cargo risczero build`
+//!   `cd zkvm/risc0-guest && cargo +risc0 build --release --target riscv32im-risc0-zkvm-elf`
+//!
+//! ## Fixed 107-Byte Canonical Public Journal Layout (Big-Endian, Identical to `sp1-guest`)
+//! - `[0..1]`    `mode: u8` (`0` = HC `StateDeltas`, `1` = HC `StateUpdates`, `2` = Raw Zstd `StateUpdates` baseline)
+//! - `[1..33]`   `blob_sha256: [u8; 32]` (`SHA-256(blob)`)
+//! - `[33..65]`  `dict_sha256: [u8; 32]` (`SHA-256(dict)`, or `[0u8; 32]` when `dict` is empty)
+//! - `[65..66]`  `is_valid: u8` (`1` = valid, `0` = intrinsic blob rejection)
+//! - `[66..67]`  `error_code: u8` (`0` = ok, `1..=19` = `HyperCompError::code()`)
+//! - `[67..71]`  `num_contracts: u32` (BE)
+//! - `[71..75]`  `total_slots: u32` (BE)
+//! - `[75..107]` `payload_sha256: [u8; 32]` (`commit_state_deltas_sha256` or `commit_state_updates_sha256`)
 //!
 //! ## Mandatory On-Chain Verifier Policy (`C-2r`)
 //! Any L1 verifier contract accepting receipts from this guest **MUST** enforce:
-//! 1. **Dictionary Binding:** `journal.dict_sha256 == APPROVED_CHAIN_DICT_SHA256` (NEVER accept
+//! 1. **Mode Binding:** `journal.mode == EXPECTED_CHAIN_MODE` (`0` for Delta-DA or `1` for Updates-DA).
+//! 2. **Dictionary Binding:** `journal.dict_sha256 == APPROVED_CHAIN_DICT_SHA256` (NEVER accept
 //!    `[0u8; 32]` on a dictionary-enabled chain).
-//! 2. **DA Blob Binding:** `journal.blob_sha256 == SHA-256(blob)` binds raw DA bytes:
+//! 3. **DA Blob Binding:** `journal.blob_sha256 == SHA-256(blob)` binds raw DA bytes:
 //!    - On **Ethereum EIP-4844**, pair with a KZG point-evaluation / equivalence proof linking
 //!      `blob_sha256` to the EIP-4844 blob `versioned_hash`.
 //!    - On **Bitcoin (e.g. Citrea)**, pair with a Bitcoin light-client Taproot witness inclusion proof.
-//! 3. **Total Provability (`R3-2`):** EVERY decode error — including `MissingDictionary` and
-//!    `DictionaryIdMismatch` — commits `(is_valid = false, error_code = err.code())`; the guest never
-//!    aborts on blob content. A malicious prover cannot use this to suppress an honest batch, because
-//!    withholding or swapping the dictionary changes `journal.dict_sha256`, which rule 1 rejects.
-//!    Conversely, a blob whose header references an unapproved dictionary is provably invalid
-//!    (`error_code = 18`) instead of being unprovable (which would halt permissionless DA chains).
-//! 4. **Consensus Limit Parity (`N-1` / `N-2`):** Uses `DecodeLimits::CONSENSUS`, identical to the
-//!    encoder, sidecar, and L2 full nodes (`100k` slots, `8 MiB` pre-entropy, `8 MiB` Zstd window,
-//!    `16 MiB` calibrated output, mandatory `Frame_Content_Size` + XXH64 checksum).
+//! 4. **Total Provability (`R3-2`):** EVERY decode error — including `MissingDictionary` (17) and
+//!    `DictionaryIdMismatch` (18) — commits `(is_valid = 0, error_code = err.code())`; the guest
+//!    never aborts on blob content. A malicious prover cannot use this to suppress an honest batch,
+//!    because withholding or swapping the dictionary changes `journal.dict_sha256`, which rule 2
+//!    rejects. Conversely, a blob whose header references an unapproved dictionary is provably
+//!    invalid (`error_code = 18`) instead of being unprovable (which would halt permissionless DA chains).
+//! 5. **Consensus Limit Parity (`N-1` / `N-2`):** Uses `DecodeLimits::CONSENSUS`, identical to the
+//!    encoder, sidecar, `sp1-guest`, and L2 full nodes (`100k` slots, `8 MiB` pre-entropy,
+//!    `8 MiB` Zstd window, `16 MiB` calibrated output, mandatory `Frame_Content_Size` + XXH64 checksum).
 
 use hypercomp_decoder::{
-    commit_state_deltas_sha256, decompress_state_deltas_with_prehashed_dict, sha256_bytes,
-    DecodeLimits, PrehashedDict,
+    commit_state_deltas_sha256, commit_state_updates_sha256,
+    decompress_state_deltas_with_prehashed_dict, decompress_state_updates_with_prehashed_dict,
+    sha256_bytes, unwrap_frame_with_prehashed_dict, ContractDiff, DecodeLimits, HyperCompError,
+    PayloadKind, PrehashedDict,
 };
 use risc0_zkvm::guest::env;
 
+pub const MODE_HC_DELTAS: u8 = 0;
+pub const MODE_HC_UPDATES: u8 = 1;
+pub const MODE_RAW_ZSTD_UPDATES: u8 = 2;
+
+fn pack_journal(
+    mode: u8,
+    blob_sha256: [u8; 32],
+    dict_sha256: [u8; 32],
+    is_valid: bool,
+    error_code: u8,
+    num_contracts: u32,
+    total_slots: u32,
+    payload_sha256: [u8; 32],
+) -> [u8; 107] {
+    let mut out = [0u8; 107];
+    out[0] = mode;
+    out[1..33].copy_from_slice(&blob_sha256);
+    out[33..65].copy_from_slice(&dict_sha256);
+    out[65] = u8::from(is_valid);
+    out[66] = error_code;
+    out[67..71].copy_from_slice(&num_contracts.to_be_bytes());
+    out[71..75].copy_from_slice(&total_slots.to_be_bytes());
+    out[75..107].copy_from_slice(&payload_sha256);
+    out
+}
+
+fn read_frame() -> Vec<u8> {
+    let mut len: u32 = 0;
+    env::read_slice(core::slice::from_mut(&mut len));
+    let mut bytes = vec![0u8; len as usize];
+    env::read_slice(&mut bytes);
+    bytes
+}
+
 fn main() {
-    // 1. Read compressed DA blob and pre-shared approved chain Zstd dictionary from RISC Zero host.
-    let blob: Vec<u8> = env::read_frame();
-    let dict: Vec<u8> = env::read_frame();
+    // 1. Read 1-byte mode frame, raw DA blob frame, and optional Zstd dictionary frame from host
+    //    using stable `env::read_slice` (matches `ExecutorEnvBuilder::write_frame`, 2 syscalls/frame,
+    //    zero serde 4x u32-word expansion).
+    let mode_frame: Vec<u8> = read_frame();
+    let blob: Vec<u8> = read_frame();
+    let dict: Vec<u8> = read_frame();
+
+    let mode: u8 = if mode_frame.len() == 1 {
+        mode_frame[0]
+    } else {
+        0xFF
+    };
 
     // 2. Cryptographically bind raw blob and hash dictionary ONCE via `PrehashedDict` (`N-5`).
     let blob_sha256 = sha256_bytes(&blob);
@@ -42,38 +98,87 @@ fn main() {
     let dict_sha256 = prehashed_dict.map_or([0u8; 32], |d| d.id());
 
     // 3. Deterministically decompress under unified consensus limits (`DecodeLimits::CONSENSUS`).
-    match decompress_state_deltas_with_prehashed_dict(&blob, prehashed_dict, DecodeLimits::CONSENSUS)
-    {
-        Ok(contracts) => {
+    let outcome: Result<(u32, u32, [u8; 32]), HyperCompError> = match mode {
+        MODE_HC_DELTAS => decompress_state_deltas_with_prehashed_dict(
+            &blob,
+            prehashed_dict,
+            DecodeLimits::CONSENSUS,
+        )
+        .map(|contracts| {
             let mut total_slots: u32 = 0;
             for c in &contracts {
                 total_slots = total_slots.saturating_add(c.storage_deltas.len() as u32);
             }
-            let deltas_sha256 = commit_state_deltas_sha256(&contracts);
+            (
+                contracts.len() as u32,
+                total_slots,
+                commit_state_deltas_sha256(&contracts),
+            )
+        }),
+        MODE_HC_UPDATES => decompress_state_updates_with_prehashed_dict(
+            &blob,
+            prehashed_dict,
+            DecodeLimits::CONSENSUS,
+        )
+        .map(|contracts| {
+            let mut total_slots: u32 = 0;
+            for c in &contracts {
+                total_slots = total_slots.saturating_add(c.storage_updates.len() as u32);
+            }
+            (
+                contracts.len() as u32,
+                total_slots,
+                commit_state_updates_sha256(&contracts),
+            )
+        }),
+        MODE_RAW_ZSTD_UPDATES => unwrap_frame_with_prehashed_dict(
+            &blob,
+            PayloadKind::StateUpdates,
+            prehashed_dict,
+            DecodeLimits::CONSENSUS,
+        )
+        .and_then(|raw| ContractDiff::from_raw_bytes(&raw, DecodeLimits::CONSENSUS))
+        .map(|contracts| {
+            let mut total_slots: u32 = 0;
+            for c in &contracts {
+                total_slots = total_slots.saturating_add(c.storage_updates.len() as u32);
+            }
+            (
+                contracts.len() as u32,
+                total_slots,
+                commit_state_updates_sha256(&contracts),
+            )
+        }),
+        other => Err(HyperCompError::InvalidFlags(other)),
+    };
 
-            // 4. Commit complete cryptographic receipt journal (`error_code = 0` on valid batch).
-            env::commit(&(
+    // 4. Commit canonical 107-byte journal directly via `commit_slice` (matches `sp1-guest`, R3-2).
+    match outcome {
+        Ok((num_contracts, total_slots, payload_sha256)) => {
+            let journal = pack_journal(
+                mode,
                 blob_sha256,
                 dict_sha256,
                 true,
-                0u8,
-                contracts.len() as u32,
+                0,
+                num_contracts,
                 total_slots,
-                deltas_sha256,
-            ));
+                payload_sha256,
+            );
+            env::commit_slice(&journal);
         }
         Err(err) => {
-            // Commit every failure (incl. dictionary faults, codes 17/18); verifier rule 1 binds
-            // `dict_sha256` to the approved dictionary, so the prover cannot fake invalidity (`R3-2`).
-            env::commit(&(
+            let journal = pack_journal(
+                mode,
                 blob_sha256,
                 dict_sha256,
                 false,
                 err.code(),
-                0u32,
-                0u32,
+                0,
+                0,
                 [0u8; 32],
-            ));
+            );
+            env::commit_slice(&journal);
         }
     }
 }

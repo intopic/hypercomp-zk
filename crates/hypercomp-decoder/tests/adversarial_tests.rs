@@ -655,4 +655,33 @@ fn test_round2_audit_regressions_n1_n2_n4_n5_c2r() {
     assert!(!HyperCompError::InvalidMagic.is_prover_witness_error());
     assert_ne!(HyperCompError::LimitExceeded.code(), 0);
     assert_ne!(HyperCompError::EntropyDecodeFailed.code(), 0);
+
+    // --- OPT-1: Binary trailing-zero pre-filter preserves exact Rhind bijection across boundaries ---
+    assert_eq!(U256::ZERO.trailing_zero_bits(), 256);
+    assert_eq!(U256::MAX.trailing_zero_bits(), 0);
+    assert_eq!(U256::from_u64(1_000_000_000_000_000_000).trailing_zero_bits(), 18); // 10^18
+    // 10^18 (1 ETH) -> mantissa=1, exp=18, m_len=1
+    assert_eq!(
+        hypercomp_decoder::rhind::has_strictly_shorter_rhind(U256::from_u64(1_000_000_000_000_000_000)),
+        Some((1, 18, 1))
+    );
+    // Max 256-bit decimal power boundary: u64::MAX * 10^57 (< 2^256, raw_be_len=32, exp=57 >= min_exp=47)
+    let max_rhind = U256::mul_u64_pow10_checked(u64::MAX, 57).expect("fits in U256");
+    assert_eq!(max_rhind.minimal_be_len(), 32);
+    assert_eq!(
+        hypercomp_decoder::rhind::has_strictly_shorter_rhind(max_rhind),
+        Some((u64::MAX, 57, 8))
+    );
+    // 32-byte value divisible by 10 ONLY ONCE (e.g., left-aligned ASCII "ABCH\0\0..." where sum=270 ≡ 0 mod 5)
+    // has exp=1 < min_exp=47, so it MUST NOT claim a 64-bit Rhind mantissa!
+    let mut left_div10 = [0u8; 32];
+    left_div10[0..4].copy_from_slice(b"ABCH");
+    assert!(U256(left_div10).is_divisible_by_10());
+    assert_eq!(hypercomp_decoder::rhind::has_strictly_shorter_rhind(U256(left_div10)), None);
+    // Non-left-aligned 32-byte hash ending in 0x0A (even & sum divisible by 5 -> divisible by 10, tz=1 < 47)
+    let mut hash_div10 = [0x11u8; 32];
+    hash_div10[31] = 0x16; // 31*17 + 22 = 549 -> +1 at byte 0 => 550 ≡ 0 mod 5, even!
+    hash_div10[0] = 0x12;
+    assert!(U256(hash_div10).is_divisible_by_10());
+    assert_eq!(hypercomp_decoder::rhind::has_strictly_shorter_rhind(U256(hash_div10)), None);
 }

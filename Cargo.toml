@@ -9,8 +9,8 @@ version = "0.2.0"
 edition = "2021"
 rust-version = "1.87"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/alsamawal-rollup/hypercomp-zk"
-homepage = "https://github.com/alsamawal-rollup/hypercomp-zk"
+repository = "https://github.com/intopic/hypercomp-zk"
+homepage = "https://github.com/intopic/hypercomp-zk"
 authors = ["Al-Samawal HyperCompressor Contributors"]
 
 [profile.release]

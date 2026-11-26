@@ -43,20 +43,39 @@ pub fn left_aligned_len(val: &U256) -> Option<usize> {
     }
 }
 
-/// Returns `true` iff `val` has a strictly shorter Rhind representation than both Raw minimal BE
-/// and Left-Aligned encoding. Used by both encoder and decoder for strict canonical bijection.
+/// Returns `Some((mantissa, exp, m_len))` iff `val` has a strictly shorter Rhind representation
+/// than both Raw minimal BE and Left-Aligned encoding. Used by both encoder and decoder for
+/// strict canonical bijection.
 #[inline]
 pub fn has_strictly_shorter_rhind(val: U256) -> Option<(u64, u8, u8)> {
-    if !val.is_divisible_by_10() {
+    // Fast bit-level pre-filter (`OPT-1`):
+    // Any valid Rhind value `v = m * 10^e` (`1 <= m < 2^64`, `e >= 1`) satisfies:
+    //   1) `v` is even (`(v.0[31] & 1) == 0`),
+    //   2) `v < 2^64 * 16^e = 2^(64 + 4e)`, so for `raw_be_len >= 9` (`v >= 2^(8*(raw_be_len-1))`),
+    //      `e >= 2 * (raw_be_len - 9) + 1`, and since `2^e | 10^e | v`, `trailing_zero_bits(v) >= e`.
+    // Rejects >99.9999% of non-Rhind 32-byte hashes/slots in a few bit ops with zero division!
+    if (val.0[31] & 1) != 0 {
         return None;
     }
-    let best_non_rhind_len = left_aligned_len(&val).unwrap_or_else(|| val.minimal_be_len());
+    let raw_be_len = val.minimal_be_len();
+    if raw_be_len < 3 {
+        return None;
+    }
+    let min_exp = if raw_be_len > 9 {
+        2 * (raw_be_len - 9) + 1
+    } else {
+        1
+    };
+    if (val.trailing_zero_bits() as usize) < min_exp {
+        return None;
+    }
+    let best_non_rhind_len = left_aligned_len(&val).unwrap_or(raw_be_len);
     // Rhind requires 2 + m_len < 1 + best_non_rhind_len <=> 1 + m_len < best_non_rhind_len
-    if best_non_rhind_len < 3 {
+    if best_non_rhind_len < 3 || !val.is_divisible_by_10() {
         return None;
     }
     let (mantissa_u256, exp) = val.extract_pow10();
-    if exp == 0 {
+    if (exp as usize) < min_exp {
         return None;
     }
     let m_u64 = mantissa_u256.to_u64_exact()?;
