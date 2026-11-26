@@ -32,7 +32,7 @@ cd ~/hypercomp-zk/zkvm/sp1-host
 | S1 | bit-flipped blob | `is_valid=0`, `error_code=19` | — |
 | S2 | prover omits dictionary | `is_valid=0`, `error_code=17`, `dict_sha256=00…` | **rejected** |
 | S3 | prover swaps dictionary | `is_valid=0`, `error_code=18`, unapproved `dict_sha256` | **rejected** |
-| S4 | 71 B RLE bomb | `is_valid=0`, `error_code=6` | — |
+| S4 | 69 B RLE bomb | `is_valid=0`, `error_code=6` | — |
 | S5 | Zstd frame without `Frame_Content_Size` | `is_valid=0`, `error_code=19` | — |
 | S6 | legacy v2 frame | `is_valid=0`, `error_code=2` | — |
 | S7 | blob header references unapproved dictionary, approved dict supplied | `is_valid=0`, `error_code=18`, `dict_sha256` = approved | **accepted** (provably invalid, no halt) |
