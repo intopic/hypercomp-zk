@@ -19,7 +19,9 @@ use std::time::Instant;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
 use hypercomp_decoder::dict::DICT_MODE_RLE;
-use hypercomp_decoder::{sha256_bytes, HyperCompError, PayloadKind, FORMAT_VERSION, MAGIC, ZSTD_MAGIC};
+use hypercomp_decoder::{
+    sha256_bytes, HyperCompError, PayloadKind, FORMAT_VERSION, MAGIC, ZSTD_MAGIC,
+};
 use serde::{Deserialize, Serialize};
 use sp1_sdk::prelude::*;
 use sp1_sdk::ProverClient;
@@ -67,6 +69,11 @@ struct Args {
     /// Optional filter substring to run only matching fixture IDs (e.g. `gnosis` or `citrea`).
     #[arg(long)]
     filter: Option<String>,
+
+    /// Skip the 7 adversarial security tests (they need the Gnosis fixtures in `fixtures_dir`);
+    /// used to benchmark extra fixture sets such as `fixtures/multichain`.
+    #[arg(long)]
+    skip_security: bool,
 
     /// Output path for the generated Markdown report.
     #[arg(long, default_value = "sp1_gpu_bench_report.md")]
@@ -194,8 +201,9 @@ fn load_fixture_bytes(dir: &Path, entry: &FixtureEntry) -> Result<(Vec<u8>, Vec<
     let blob = fs::read(dir.join(&entry.blob_file))
         .with_context(|| format!("failed reading fixture blob {}", entry.blob_file))?;
     let dict = match &entry.dict_file {
-        Some(f) => fs::read(dir.join(f))
-            .with_context(|| format!("failed reading fixture dict {f}"))?,
+        Some(f) => {
+            fs::read(dir.join(f)).with_context(|| format!("failed reading fixture dict {f}"))?
+        }
         None => Vec::new(),
     };
     Ok((blob, dict))
@@ -221,7 +229,9 @@ async fn main() -> Result<()> {
     }
 
     println!("==========================================================================================");
-    println!("  Al-Samawal Rollup HyperCompressor v3 — Succinct SP1 v6 GPU Benchmark & Security Suite");
+    println!(
+        "  Al-Samawal Rollup HyperCompressor v3 — Succinct SP1 v6 GPU Benchmark & Security Suite"
+    );
     println!(
         "  Run Mode: {:?} | Proof Kind: {:?} | SP1_PROVER={} | Guest ELF: {} bytes",
         args.mode,
@@ -235,16 +245,15 @@ async fn main() -> Result<()> {
 
     // Only pay `setup(ELF)` cost when actually proving.
     let pk_opt = if args.mode == RunMode::Prove {
-        println!("[Setup] Generating SP1 proving & verifying keys (pk/vk) for hypercomp-sp1-guest...");
+        println!(
+            "[Setup] Generating SP1 proving & verifying keys (pk/vk) for hypercomp-sp1-guest..."
+        );
         let t0 = Instant::now();
         let pk = client
             .setup(HYPERCOMP_SP1_ELF)
             .await
             .context("SP1 setup failed")?;
-        println!(
-            "[Setup] Done in {:.2}s.\n",
-            t0.elapsed().as_secs_f64()
-        );
+        println!("[Setup] Done in {:.2}s.\n", t0.elapsed().as_secs_f64());
         Some(pk)
     } else {
         None
@@ -327,7 +336,10 @@ async fn main() -> Result<()> {
                     .verify(&proof, pk.verifying_key(), None)
                     .with_context(|| format!("SP1 core verify failed on {}", entry.id))?;
                 if proof.public_values.as_slice() != pub_vals.as_slice() {
-                    bail!("core proof public_values diverged from execute on {}", entry.id);
+                    bail!(
+                        "core proof public_values diverged from execute on {}",
+                        entry.id
+                    );
                 }
                 core_secs = Some(secs);
                 core_ok = Some(true);
@@ -387,10 +399,17 @@ async fn main() -> Result<()> {
     }
 
     // Cryptographic Lossless Equivalence Assertions (HC Updates == Raw Zstd inside SP1!)
-    for (raw_id, hc_id) in [
-        ("gnosis_raw_zstd_dict", "gnosis_hc_updates_dict"),
-        ("citrea_raw_zstd_dict", "citrea_hc_updates_dict"),
-    ] {
+    // Every `<batch>_hc_updates_dict` must commit the same payload as its `<batch>_raw_zstd[_dict]`.
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for hc_id in payload_hashes.keys() {
+        if let Some(base) = hc_id.strip_suffix("_hc_updates_dict") {
+            for raw_suffix in ["_raw_zstd_dict", "_raw_zstd"] {
+                pairs.push((format!("{base}{raw_suffix}"), hc_id.clone()));
+            }
+        }
+    }
+    pairs.sort();
+    for (raw_id, hc_id) in &pairs {
         if let (Some(h_raw), Some(h_hc)) = (payload_hashes.get(raw_id), payload_hashes.get(hc_id)) {
             if h_raw != h_hc {
                 bail!("LOSSLESS EQUIVALENCE FAILURE: {raw_id} ({h_raw}) != {hc_id} ({h_hc})");
@@ -408,244 +427,264 @@ async fn main() -> Result<()> {
     println!("\n=== PART B: 7 LIVE ADVERSARIAL SECURITY TESTS INSIDE REAL SP1 zkVM ===");
     let mut sec_results = Vec::new();
 
-    // Load Gnosis Deltas + Dict + Wrong Dict for live adversarial attacks
-    let gnosis_blob = fs::read(args.fixtures_dir.join("gnosis_hc_deltas_dict.bin"))?;
-    let gnosis_dict = fs::read(args.fixtures_dir.join("gnosis_dict_del.zdict"))?;
-    let wrong_dict = fs::read(args.fixtures_dir.join("gnosis_dict_upd.zdict"))?;
+    if !args.skip_security {
+        // Load Gnosis Deltas + Dict + Wrong Dict for live adversarial attacks
+        let gnosis_blob = fs::read(args.fixtures_dir.join("gnosis_hc_deltas_dict.bin"))?;
+        let gnosis_dict = fs::read(args.fixtures_dir.join("gnosis_dict_del.zdict"))?;
+        let wrong_dict = fs::read(args.fixtures_dir.join("gnosis_dict_upd.zdict"))?;
 
-    // S1: Bit-Flip / Corrupt Blob -> must NOT panic, must commit is_valid=false, error_code=19 (EntropyDecodeFailed)
-    {
-        let mut corrupt = gnosis_blob.clone();
-        let mid = corrupt.len() / 2;
-        corrupt[mid] ^= 0xFF;
-        let stdin = build_stdin(MODE_HC_DELTAS, &corrupt, &gnosis_dict);
-        let (pv, rep) = client
-            .execute(HYPERCOMP_SP1_ELF, stdin.clone())
-            .await
-            .context("S1 corrupt blob should NOT crash SP1 host")?;
-        if rep.exit_code != 0 {
-            bail!("S1 corrupt blob panicked guest (exit_code={})", rep.exit_code);
+        // S1: Bit-Flip / Corrupt Blob -> must NOT panic, must commit is_valid=false, error_code=19 (EntropyDecodeFailed)
+        {
+            let mut corrupt = gnosis_blob.clone();
+            let mid = corrupt.len() / 2;
+            corrupt[mid] ^= 0xFF;
+            let stdin = build_stdin(MODE_HC_DELTAS, &corrupt, &gnosis_dict);
+            let (pv, rep) = client
+                .execute(HYPERCOMP_SP1_ELF, stdin.clone())
+                .await
+                .context("S1 corrupt blob should NOT crash SP1 host")?;
+            if rep.exit_code != 0 {
+                bail!(
+                    "S1 corrupt blob panicked guest (exit_code={})",
+                    rep.exit_code
+                );
+            }
+            let j = DecodedJournal::from_slice(pv.as_slice())?;
+            let mut extra = String::new();
+            if let Some(ref pk) = pk_opt {
+                let t0 = Instant::now();
+                let proof = client.prove(pk, stdin).core().await?;
+                client.verify(&proof, pk.verifying_key(), None)?;
+                extra = format!(
+                    ", real rejection core proof verified in {:.2}s",
+                    t0.elapsed().as_secs_f64()
+                );
+            }
+            let ok = !j.is_valid
+                && j.error_code == HyperCompError::EntropyDecodeFailed.code()
+                && j.blob_sha256 == sha256_bytes(&corrupt);
+            if !ok {
+                bail!("S1 failed: got {j:?}");
+            }
+            let detail = format!(
+                "cleanly committed is_valid=false, error_code={} (EntropyDecodeFailed), zero panic{extra}",
+                j.error_code
+            );
+            println!("  [PASS] S1 (Bit-Flip Corrupt Blob)      : {detail}");
+            sec_results.push(SecurityTestResult {
+                id: "S1".into(),
+                name: "Bit-Flip Corrupt Blob (Zero-Panic Rejection)".into(),
+                passed: true,
+                sp1_cycles: Some(rep.total_instruction_count()),
+                detail,
+            });
         }
-        let j = DecodedJournal::from_slice(pv.as_slice())?;
-        let mut extra = String::new();
-        if let Some(ref pk) = pk_opt {
-            let t0 = Instant::now();
-            let proof = client.prove(pk, stdin).core().await?;
-            client.verify(&proof, pk.verifying_key(), None)?;
-            extra = format!(", real rejection core proof verified in {:.2}s", t0.elapsed().as_secs_f64());
-        }
-        let ok = !j.is_valid
-            && j.error_code == HyperCompError::EntropyDecodeFailed.code()
-            && j.blob_sha256 == sha256_bytes(&corrupt);
-        if !ok {
-            bail!("S1 failed: got {j:?}");
-        }
-        let detail = format!(
-            "cleanly committed is_valid=false, error_code={} (EntropyDecodeFailed), zero panic{extra}",
-            j.error_code
-        );
-        println!("  [PASS] S1 (Bit-Flip Corrupt Blob)      : {detail}");
-        sec_results.push(SecurityTestResult {
-            id: "S1".into(),
-            name: "Bit-Flip Corrupt Blob (Zero-Panic Rejection)".into(),
-            passed: true,
-            sp1_cycles: Some(rep.total_instruction_count()),
-            detail,
-        });
-    }
 
-    // R3-2 verifier policy model: the L1 verifier accepts a journal ONLY if
-    // `dict_sha256 == APPROVED_CHAIN_DICT_SHA256` (here: SHA-256 of the Gnosis deltas dictionary).
-    let approved_dict_sha256 = sha256_bytes(&gnosis_dict);
-    let verifier_accepts = |j: &DecodedJournal| j.dict_sha256 == approved_dict_sha256;
+        // R3-2 verifier policy model: the L1 verifier accepts a journal ONLY if
+        // `dict_sha256 == APPROVED_CHAIN_DICT_SHA256` (here: SHA-256 of the Gnosis deltas dictionary).
+        let approved_dict_sha256 = sha256_bytes(&gnosis_dict);
+        let verifier_accepts = |j: &DecodedJournal| j.dict_sha256 == approved_dict_sha256;
 
-    // S2: Malicious prover omits the dictionary -> guest commits is_valid=false (code 17), but the
-    // journal carries dict_sha256 = 0x00.., so the verifier REJECTS it (prover cannot suppress the batch).
-    {
-        let stdin = build_stdin(MODE_HC_DELTAS, &gnosis_blob, &[]);
-        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
-        if rep.exit_code != 0 {
-            bail!("S2 guest must not abort on blob content (exit_code={})", rep.exit_code);
+        // S2: Malicious prover omits the dictionary -> guest commits is_valid=false (code 17), but the
+        // journal carries dict_sha256 = 0x00.., so the verifier REJECTS it (prover cannot suppress the batch).
+        {
+            let stdin = build_stdin(MODE_HC_DELTAS, &gnosis_blob, &[]);
+            let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+            if rep.exit_code != 0 {
+                bail!(
+                    "S2 guest must not abort on blob content (exit_code={})",
+                    rep.exit_code
+                );
+            }
+            let j = DecodedJournal::from_slice(pv.as_slice())?;
+            let missing_code = HyperCompError::MissingDictionary([0u8; 32]).code();
+            if j.is_valid || j.error_code != missing_code || verifier_accepts(&j) {
+                bail!("SECURITY FAILURE S2 (R3-2): omitted-dictionary journal would be accepted: {j:?}");
+            }
+            let detail = format!(
+                "committed is_valid=false, error_code={missing_code} with dict_sha256=0x00.. -> REJECTED by verifier policy (cannot suppress honest batch)"
+            );
+            println!("  [PASS] S2 (Prover Omits Dict)          : {detail}");
+            sec_results.push(SecurityTestResult {
+                id: "S2".into(),
+                name: "R3-2 Prover Omits Dictionary: Journal Rejected by dict_sha256 Policy".into(),
+                passed: true,
+                sp1_cycles: Some(rep.total_instruction_count()),
+                detail,
+            });
         }
-        let j = DecodedJournal::from_slice(pv.as_slice())?;
-        let missing_code = HyperCompError::MissingDictionary([0u8; 32]).code();
-        if j.is_valid || j.error_code != missing_code || verifier_accepts(&j) {
-            bail!("SECURITY FAILURE S2 (R3-2): omitted-dictionary journal would be accepted: {j:?}");
-        }
-        let detail = format!(
-            "committed is_valid=false, error_code={missing_code} with dict_sha256=0x00.. -> REJECTED by verifier policy (cannot suppress honest batch)"
-        );
-        println!("  [PASS] S2 (Prover Omits Dict)          : {detail}");
-        sec_results.push(SecurityTestResult {
-            id: "S2".into(),
-            name: "R3-2 Prover Omits Dictionary: Journal Rejected by dict_sha256 Policy".into(),
-            passed: true,
-            sp1_cycles: Some(rep.total_instruction_count()),
-            detail,
-        });
-    }
 
-    // S3: Malicious prover swaps in a wrong dictionary -> code 18, dict_sha256 != APPROVED -> rejected.
-    {
-        let stdin = build_stdin(MODE_HC_DELTAS, &gnosis_blob, &wrong_dict);
-        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
-        if rep.exit_code != 0 {
-            bail!("S3 guest must not abort on blob content (exit_code={})", rep.exit_code);
+        // S3: Malicious prover swaps in a wrong dictionary -> code 18, dict_sha256 != APPROVED -> rejected.
+        {
+            let stdin = build_stdin(MODE_HC_DELTAS, &gnosis_blob, &wrong_dict);
+            let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+            if rep.exit_code != 0 {
+                bail!(
+                    "S3 guest must not abort on blob content (exit_code={})",
+                    rep.exit_code
+                );
+            }
+            let j = DecodedJournal::from_slice(pv.as_slice())?;
+            let mismatch_code = HyperCompError::DictionaryIdMismatch {
+                expected: [0u8; 32],
+                found: [0u8; 32],
+            }
+            .code();
+            if j.is_valid || j.error_code != mismatch_code || verifier_accepts(&j) {
+                bail!("SECURITY FAILURE S3 (R3-2): swapped-dictionary journal would be accepted: {j:?}");
+            }
+            let detail = format!(
+                "committed is_valid=false, error_code={mismatch_code} with unapproved dict_sha256 -> REJECTED by verifier policy"
+            );
+            println!("  [PASS] S3 (Prover Swaps Dict)          : {detail}");
+            sec_results.push(SecurityTestResult {
+                id: "S3".into(),
+                name: "R3-2 Prover Swaps Dictionary: Journal Rejected by dict_sha256 Policy".into(),
+                passed: true,
+                sp1_cycles: Some(rep.total_instruction_count()),
+                detail,
+            });
         }
-        let j = DecodedJournal::from_slice(pv.as_slice())?;
-        let mismatch_code = HyperCompError::DictionaryIdMismatch {
-            expected: [0u8; 32],
-            found: [0u8; 32],
-        }
-        .code();
-        if j.is_valid || j.error_code != mismatch_code || verifier_accepts(&j) {
-            bail!("SECURITY FAILURE S3 (R3-2): swapped-dictionary journal would be accepted: {j:?}");
-        }
-        let detail = format!(
-            "committed is_valid=false, error_code={mismatch_code} with unapproved dict_sha256 -> REJECTED by verifier policy"
-        );
-        println!("  [PASS] S3 (Prover Swaps Dict)          : {detail}");
-        sec_results.push(SecurityTestResult {
-            id: "S3".into(),
-            name: "R3-2 Prover Swaps Dictionary: Journal Rejected by dict_sha256 Policy".into(),
-            passed: true,
-            sp1_cycles: Some(rep.total_instruction_count()),
-            detail,
-        });
-    }
 
-    // S7: Poster publishes a blob whose HEADER references an unapproved dictionary. The honest prover
-    // supplies the approved dictionary -> provably invalid (code 18, dict_sha256 == APPROVED, accepted),
-    // instead of an unprovable blob that would halt a permissionless-DA chain.
-    {
-        let rogue_blob = fs::read(args.fixtures_dir.join("gnosis_hc_updates_dict.bin"))?;
-        let stdin = build_stdin(MODE_HC_UPDATES, &rogue_blob, &gnosis_dict);
-        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
-        if rep.exit_code != 0 {
-            bail!("S7 rogue-header blob halted proving (exit_code={})", rep.exit_code);
+        // S7: Poster publishes a blob whose HEADER references an unapproved dictionary. The honest prover
+        // supplies the approved dictionary -> provably invalid (code 18, dict_sha256 == APPROVED, accepted),
+        // instead of an unprovable blob that would halt a permissionless-DA chain.
+        {
+            let rogue_blob = fs::read(args.fixtures_dir.join("gnosis_hc_updates_dict.bin"))?;
+            let stdin = build_stdin(MODE_HC_UPDATES, &rogue_blob, &gnosis_dict);
+            let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+            if rep.exit_code != 0 {
+                bail!(
+                    "S7 rogue-header blob halted proving (exit_code={})",
+                    rep.exit_code
+                );
+            }
+            let j = DecodedJournal::from_slice(pv.as_slice())?;
+            let mismatch_code = HyperCompError::DictionaryIdMismatch {
+                expected: [0u8; 32],
+                found: [0u8; 32],
+            }
+            .code();
+            if j.is_valid || j.error_code != mismatch_code || !verifier_accepts(&j) {
+                bail!("S7 rogue-header blob not provably invalid: {j:?}");
+            }
+            let detail = format!(
+                "blob referencing unapproved dictionary committed is_valid=false, error_code={mismatch_code}, dict_sha256 == APPROVED -> accepted as provably invalid (no liveness halt)"
+            );
+            println!("  [PASS] S7 (Rogue Dict Header Blob)     : {detail}");
+            sec_results.push(SecurityTestResult {
+                id: "S7".into(),
+                name: "R3-2 Blob Referencing Unapproved Dictionary Is Provably Invalid".into(),
+                passed: true,
+                sp1_cycles: Some(rep.total_instruction_count()),
+                detail,
+            });
         }
-        let j = DecodedJournal::from_slice(pv.as_slice())?;
-        let mismatch_code = HyperCompError::DictionaryIdMismatch {
-            expected: [0u8; 32],
-            found: [0u8; 32],
-        }
-        .code();
-        if j.is_valid || j.error_code != mismatch_code || !verifier_accepts(&j) {
-            bail!("S7 rogue-header blob not provably invalid: {j:?}");
-        }
-        let detail = format!(
-            "blob referencing unapproved dictionary committed is_valid=false, error_code={mismatch_code}, dict_sha256 == APPROVED -> accepted as provably invalid (no liveness halt)"
-        );
-        println!("  [PASS] S7 (Rogue Dict Header Blob)     : {detail}");
-        sec_results.push(SecurityTestResult {
-            id: "S7".into(),
-            name: "R3-2 Blob Referencing Unapproved Dictionary Is Provably Invalid".into(),
-            passed: true,
-            sp1_cycles: Some(rep.total_instruction_count()),
-            detail,
-        });
-    }
 
-    // S4: H-1 71-Byte RLE OOM Bomb -> cleanly commits is_valid=false, error_code=6 (UnexpectedEof), zero OOM!
-    {
-        let mut rle_bomb = vec![
-            MAGIC[0],
-            MAGIC[1],
-            FORMAT_VERSION,
-            PayloadKind::StateDeltas as u8, // EntropyCodec::None
-        ];
-        rle_bomb.push(1); // 1 contract
-        rle_bomb.extend_from_slice(&[0xAA; 20]);
-        rle_bomb.push(0); // nonce bitmap = 0
-        rle_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]); // 50,000 slots
-        rle_bomb.push(0); // SLOT_MODE_DICT32
-        rle_bomb.push(DICT_MODE_RLE);
-        rle_bomb.push(1); // vlen = 1
-        rle_bomb.extend_from_slice(&[0xBB; 32]);
-        rle_bomb.push(1);
-        rle_bomb.push(0);
-        rle_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]);
-        let stdin = build_stdin(MODE_HC_DELTAS, &rle_bomb, &[]);
-        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
-        if rep.exit_code != 0 {
-            bail!("S4 RLE bomb panicked guest (exit_code={})", rep.exit_code);
+        // S4: H-1 71-Byte RLE OOM Bomb -> cleanly commits is_valid=false, error_code=6 (UnexpectedEof), zero OOM!
+        {
+            let mut rle_bomb = vec![
+                MAGIC[0],
+                MAGIC[1],
+                FORMAT_VERSION,
+                PayloadKind::StateDeltas as u8, // EntropyCodec::None
+            ];
+            rle_bomb.push(1); // 1 contract
+            rle_bomb.extend_from_slice(&[0xAA; 20]);
+            rle_bomb.push(0); // nonce bitmap = 0
+            rle_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]); // 50,000 slots
+            rle_bomb.push(0); // SLOT_MODE_DICT32
+            rle_bomb.push(DICT_MODE_RLE);
+            rle_bomb.push(1); // vlen = 1
+            rle_bomb.extend_from_slice(&[0xBB; 32]);
+            rle_bomb.push(1);
+            rle_bomb.push(0);
+            rle_bomb.extend_from_slice(&[0xD0, 0x86, 0x03]);
+            let stdin = build_stdin(MODE_HC_DELTAS, &rle_bomb, &[]);
+            let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+            if rep.exit_code != 0 {
+                bail!("S4 RLE bomb panicked guest (exit_code={})", rep.exit_code);
+            }
+            let j = DecodedJournal::from_slice(pv.as_slice())?;
+            if j.is_valid || j.error_code != HyperCompError::UnexpectedEof.code() {
+                bail!("S4 RLE bomb failed: got {j:?}");
+            }
+            let detail = format!(
+                "rejected {} B RLE OOM bomb in {} SP1 cycles (error_code=6 UnexpectedEof, 0 MiB allocated)",
+                rle_bomb.len(),
+                rep.total_instruction_count()
+            );
+            println!("  [PASS] S4 (H-1 71B RLE OOM Bomb)       : {detail}");
+            sec_results.push(SecurityTestResult {
+                id: "S4".into(),
+                name: "H-1 RLE OOM-Bomb Rejection in SP1".into(),
+                passed: true,
+                sp1_cycles: Some(rep.total_instruction_count()),
+                detail,
+            });
         }
-        let j = DecodedJournal::from_slice(pv.as_slice())?;
-        if j.is_valid || j.error_code != HyperCompError::UnexpectedEof.code() {
-            bail!("S4 RLE bomb failed: got {j:?}");
-        }
-        let detail = format!(
-            "rejected {} B RLE OOM bomb in {} SP1 cycles (error_code=6 UnexpectedEof, 0 MiB allocated)",
-            rle_bomb.len(),
-            rep.total_instruction_count()
-        );
-        println!("  [PASS] S4 (H-1 71B RLE OOM Bomb)       : {detail}");
-        sec_results.push(SecurityTestResult {
-            id: "S4".into(),
-            name: "H-1 RLE OOM-Bomb Rejection in SP1".into(),
-            passed: true,
-            sp1_cycles: Some(rep.total_instruction_count()),
-            detail,
-        });
-    }
 
-    // S5: N-2 PoC R-3 Missing Frame_Content_Size Bomb -> cleanly commits is_valid=false, error_code=19!
-    {
-        let mut no_fcs = vec![
-            MAGIC[0],
-            MAGIC[1],
-            FORMAT_VERSION,
-            (PayloadKind::StateDeltas as u8) | (1u8 << 3), // EntropyCodec::Zstd
-        ];
-        no_fcs.extend_from_slice(&ZSTD_MAGIC);
-        no_fcs.extend_from_slice(&[0x04, 0x00, 0x01, 0x00, 0x00]); // checksum=1, fcs=0, single_seg=0
-        let stdin = build_stdin(MODE_HC_DELTAS, &no_fcs, &[]);
-        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
-        if rep.exit_code != 0 {
-            bail!("S5 missing-FCS panicked guest (exit_code={})", rep.exit_code);
+        // S5: N-2 PoC R-3 Missing Frame_Content_Size Bomb -> cleanly commits is_valid=false, error_code=19!
+        {
+            let mut no_fcs = vec![
+                MAGIC[0],
+                MAGIC[1],
+                FORMAT_VERSION,
+                (PayloadKind::StateDeltas as u8) | (1u8 << 3), // EntropyCodec::Zstd
+            ];
+            no_fcs.extend_from_slice(&ZSTD_MAGIC);
+            no_fcs.extend_from_slice(&[0x04, 0x00, 0x01, 0x00, 0x00]); // checksum=1, fcs=0, single_seg=0
+            let stdin = build_stdin(MODE_HC_DELTAS, &no_fcs, &[]);
+            let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+            if rep.exit_code != 0 {
+                bail!(
+                    "S5 missing-FCS panicked guest (exit_code={})",
+                    rep.exit_code
+                );
+            }
+            let j = DecodedJournal::from_slice(pv.as_slice())?;
+            if j.is_valid || j.error_code != HyperCompError::EntropyDecodeFailed.code() {
+                bail!("S5 missing-FCS failed: got {j:?}");
+            }
+            let detail = format!(
+                "rejected Zstd frame without Frame_Content_Size in {} SP1 cycles (error_code=19)",
+                rep.total_instruction_count()
+            );
+            println!("  [PASS] S5 (N-2 Missing FCS Bomb)       : {detail}");
+            sec_results.push(SecurityTestResult {
+                id: "S5".into(),
+                name: "N-2 PoC R-3 Missing Frame_Content_Size Rejection in SP1".into(),
+                passed: true,
+                sp1_cycles: Some(rep.total_instruction_count()),
+                detail,
+            });
         }
-        let j = DecodedJournal::from_slice(pv.as_slice())?;
-        if j.is_valid || j.error_code != HyperCompError::EntropyDecodeFailed.code() {
-            bail!("S5 missing-FCS failed: got {j:?}");
-        }
-        let detail = format!(
-            "rejected Zstd frame without Frame_Content_Size in {} SP1 cycles (error_code=19)",
-            rep.total_instruction_count()
-        );
-        println!("  [PASS] S5 (N-2 Missing FCS Bomb)       : {detail}");
-        sec_results.push(SecurityTestResult {
-            id: "S5".into(),
-            name: "N-2 PoC R-3 Missing Frame_Content_Size Rejection in SP1".into(),
-            passed: true,
-            sp1_cycles: Some(rep.total_instruction_count()),
-            detail,
-        });
-    }
 
-    // S6: N-4 Legacy v2 Frame Rejection -> cleanly commits is_valid=false, error_code=2 (UnsupportedVersion)!
-    {
-        let v2_blob = [MAGIC[0], MAGIC[1], 2u8, PayloadKind::StateDeltas as u8, 0];
-        let stdin = build_stdin(MODE_HC_DELTAS, &v2_blob, &[]);
-        let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
-        if rep.exit_code != 0 {
-            bail!("S6 v2 frame panicked guest (exit_code={})", rep.exit_code);
+        // S6: N-4 Legacy v2 Frame Rejection -> cleanly commits is_valid=false, error_code=2 (UnsupportedVersion)!
+        {
+            let v2_blob = [MAGIC[0], MAGIC[1], 2u8, PayloadKind::StateDeltas as u8, 0];
+            let stdin = build_stdin(MODE_HC_DELTAS, &v2_blob, &[]);
+            let (pv, rep) = client.execute(HYPERCOMP_SP1_ELF, stdin).await?;
+            if rep.exit_code != 0 {
+                bail!("S6 v2 frame panicked guest (exit_code={})", rep.exit_code);
+            }
+            let j = DecodedJournal::from_slice(pv.as_slice())?;
+            if j.is_valid || j.error_code != HyperCompError::UnsupportedVersion(2).code() {
+                bail!("S6 v2 rejection failed: got {j:?}");
+            }
+            let detail = format!(
+                "rejected legacy v2 frame in {} SP1 cycles (error_code=2 UnsupportedVersion)",
+                rep.total_instruction_count()
+            );
+            println!("  [PASS] S6 (N-4 Legacy v2 Rejection)    : {detail}");
+            sec_results.push(SecurityTestResult {
+                id: "S6".into(),
+                name: "N-4 Legacy Wire Version v2 Rejection in SP1".into(),
+                passed: true,
+                sp1_cycles: Some(rep.total_instruction_count()),
+                detail,
+            });
         }
-        let j = DecodedJournal::from_slice(pv.as_slice())?;
-        if j.is_valid || j.error_code != HyperCompError::UnsupportedVersion(2).code() {
-            bail!("S6 v2 rejection failed: got {j:?}");
-        }
-        let detail = format!(
-            "rejected legacy v2 frame in {} SP1 cycles (error_code=2 UnsupportedVersion)",
-            rep.total_instruction_count()
-        );
-        println!("  [PASS] S6 (N-4 Legacy v2 Rejection)    : {detail}");
-        sec_results.push(SecurityTestResult {
-            id: "S6".into(),
-            name: "N-4 Legacy Wire Version v2 Rejection in SP1".into(),
-            passed: true,
-            sp1_cycles: Some(rep.total_instruction_count()),
-            detail,
-        });
     }
 
     // -----------------------------------------------------------------------
@@ -667,8 +706,8 @@ async fn main() -> Result<()> {
         report.prover_backend, report.format_version, report.elf_bytes
     ));
     md.push_str("## 1. Real Mainnet SP1 Cycles & GPU Proving Results\n\n");
-    md.push_str("| Fixture | Blob Size | SP1 Cycles (w/ SHA-256 Precompile) | SP1 Syscalls | Core Proof (s) | Compressed Proof (s) | Parity & Verify |\n");
-    md.push_str("|---|---:|---:|---:|---:|---:|---|\n");
+    md.push_str("| Fixture | Batch | Slots | Raw DA | Blob Size | SP1 Cycles (w/ SHA-256 Precompile) | SP1 Syscalls | Core Proof (s) | Compressed Proof (s) | Parity & Verify |\n");
+    md.push_str("|---|---|---:|---:|---:|---:|---:|---:|---:|---|\n");
     for r in &report.benchmarks {
         let core_s = r
             .core_prove_secs
@@ -682,23 +721,44 @@ async fn main() -> Result<()> {
             "FAIL"
         };
         md.push_str(&format!(
-            "| {} | {} B | {} | {} | {} | {} | {} |\n",
-            r.label, r.pure_wire_bytes, r.sp1_total_cycles, r.sp1_total_syscalls, core_s, comp_s, ver
+            "| {} | {} | {} | {} B | {} B | {} | {} | {} | {} | {} |\n",
+            r.label,
+            r.chain,
+            r.total_slots,
+            r.raw_da_bytes,
+            r.pure_wire_bytes,
+            r.sp1_total_cycles,
+            r.sp1_total_syscalls,
+            core_s,
+            comp_s,
+            ver
         ));
     }
-    md.push_str("\n## 2. Live Adversarial Security Suite inside SP1 zkVM\n\n");
-    md.push_str("| Test | Security Property | SP1 Cycles | Result |\n");
-    md.push_str("|---|---|---:|---|\n");
-    for s in &report.security_tests {
-        let cyc = s
-            .sp1_cycles
-            .map_or_else(|| "ABORTED (expected)".into(), |c| c.to_string());
-        md.push_str(&format!("| **{}** | {} | {} | PASS — {} |\n", s.id, s.name, cyc, s.detail));
+    if !report.security_tests.is_empty() {
+        md.push_str("\n## 2. Live Adversarial Security Suite inside SP1 zkVM\n\n");
+        md.push_str("| Test | Security Property | SP1 Cycles | Result |\n");
+        md.push_str("|---|---|---:|---|\n");
+        for s in &report.security_tests {
+            let cyc = s
+                .sp1_cycles
+                .map_or_else(|| "ABORTED (expected)".into(), |c| c.to_string());
+            md.push_str(&format!(
+                "| **{}** | {} | {} | PASS — {} |\n",
+                s.id, s.name, cyc, s.detail
+            ));
+        }
     }
     fs::write(&args.out_md, &md)?;
 
     println!("\n==========================================================================================");
-    println!("  ALL BENCHMARKS & 7/7 LIVE SP1 SECURITY TESTS PASSED!");
+    if args.skip_security {
+        println!(
+            "  ALL {} BENCHMARK FIXTURES PASSED (security suite skipped)!",
+            report.benchmarks.len()
+        );
+    } else {
+        println!("  ALL BENCHMARKS & 7/7 LIVE SP1 SECURITY TESTS PASSED!");
+    }
     println!("  Markdown report saved : {}", args.out_md.display());
     println!("  JSON report saved     : {}", args.out_json.display());
     println!("==========================================================================================");

@@ -63,6 +63,18 @@ RUST_LOG=warn SP1_PROVER=cpu cargo run --release -- \
   --out-json sp1_execute_report.json \
   "${EXTRA_ARGS[@]}"
 
+if [ -f fixtures/multichain/expected_manifest.json ]; then
+  echo ""
+  echo "[3b/4] Running SP1 Execution on Multi-Mainnet Fixtures (Ethereum, Base, Optimism, Polygon, ...)..."
+  RUST_LOG=warn SP1_PROVER=cpu cargo run --release -- \
+    --mode execute \
+    --fixtures-dir fixtures/multichain \
+    --skip-security \
+    --out-md sp1_multichain_execute_report.md \
+    --out-json sp1_multichain_execute_report.json \
+    "${EXTRA_ARGS[@]}"
+fi
+
 if [ "$MODE" = "prove" ]; then
   PROVER_BACKEND="cuda"
   if ! command -v nvidia-smi >/dev/null 2>&1; then
@@ -76,6 +88,19 @@ if [ "$MODE" = "prove" ]; then
     --out-md sp1_gpu_bench_report.md \
     --out-json sp1_gpu_bench_report.json \
     "${EXTRA_ARGS[@]}"
+
+  if [ -f fixtures/multichain/expected_manifest.json ]; then
+    echo ""
+    echo "[4b/4] Real ZK Proving on Multi-Mainnet Fixtures (SP1_PROVER=$PROVER_BACKEND)..."
+    RUST_LOG=info SP1_PROVER="$PROVER_BACKEND" cargo run --release -- \
+      --mode prove \
+      --proof-kind "$PROOF_KIND" \
+      --fixtures-dir fixtures/multichain \
+      --skip-security \
+      --out-md sp1_multichain_gpu_report.md \
+      --out-json sp1_multichain_gpu_report.json \
+      "${EXTRA_ARGS[@]}"
+  fi
 
   echo ""
   echo "=========================================================================================="

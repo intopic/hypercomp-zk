@@ -69,7 +69,7 @@ jobs:
           curl -L https://sp1up.succinct.xyz | bash
           ~/.sp1/bin/sp1up -v v6.10.0
           echo "$HOME/.sp1/bin" >> "$GITHUB_PATH"
-      - name: Run SP1 execute-only suite (fixtures + 7/7 security tests)
+      - name: Run SP1 execute-only suite (fixtures + 7/7 security tests + multi-mainnet fixtures)
         working-directory: zkvm/sp1-host
         run: bash run_sp1_gpu_bench.sh --execute-only
       - name: Upload execute report
@@ -79,6 +79,7 @@ jobs:
           name: sp1-execute-report
           path: |
             zkvm/sp1-host/sp1_execute_report.*
+            zkvm/sp1-host/sp1_multichain_execute_report.*
             zkvm/sp1-host/Cargo.lock
             zkvm/sp1-guest/Cargo.lock
           if-no-files-found: warn
