@@ -12,8 +12,9 @@ from synthetic workloads. Each number links to the data file it comes from, and 
 | How often each rollup posts, what it pays, how many L2 blocks per batch | [1](#1-what-rollups-post-and-pay-today-ethereum-7-days) | [`ethereum_rollup_da_profile_2026-11-19_25.json`](data/ethereum_rollup_da_profile_2026-11-19_25.json) |
 | What Citrea posts to Bitcoin and what it pays | [2](#2-citrea-what-it-posts-to-bitcoin-and-what-it-pays) | [`citrea_bitcoin_da_cost_1day.json`](data/citrea_bitcoin_da_cost_1day.json) |
 | HC vs Brotli / Zstd / Zstd + Dict on Citrea's real DA payloads | [3](#3-hc-on-citreas-real-da-payloads) | [`citrea_hc_vs_brotli.json`](data/citrea_hc_vs_brotli.json) |
+| What Alpen posts to Bitcoin (Signet) and HC vs Zstd + Dict on it | [3b](#3b-alpen-strata-on-bitcoin-signet) | [`alpen_hc_vs_zstd_dict.json`](data/alpen_hc_vs_zstd_dict.json) |
 | HC vs Brotli / Zstd / Zstd + Dict on EVM state diffs at each rollup's real batch size | [4](#4-hc-on-evm-state-diffs-at-real-batch-sizes) | [`evm_state_diff_compression_summary.json`](data/evm_state_diff_compression_summary.json), [`evm_real_batch_size_results.json`](data/evm_real_batch_size_results.json) |
-| SP1 zkVM execution of every fixture | [5](#5-sp1-zkvm-execution) | CI artifact `sp1-execute-report` |
+| SP1 zkVM execution of every fixture | [5](#5-sp1-zkvm-execution) | [`sp1_multichain_execute_report_ci45909469689.md`](data/sp1_multichain_execute_report_ci45909469689.md) |
 
 ---
 
@@ -28,6 +29,11 @@ from synthetic workloads. Each number links to the data file it comes from, and 
   Against plain Zstd or Brotli q=11 it gains **+8% to +22%** (Section 4).
 - **HC does not help on Citrea's current DA format.** Citrea posts hashed storage keys and 256 block
   hashes per proof. There, a trained dictionary does all the work: plain Zstd + Dict beats HC (Section 3).
+- **HC does not help on Alpen's current Signet traffic either.** Alpen posts plain `(address, slot, value)` diffs,
+  but **uncompressed**. A trained Zstd dictionary alone shrinks its blobs by **68.4%**. At ~12 storage slots per
+  1,440-block batch, plain Zstd + Dict beats HC (Section 3b). This is testnet traffic and may not represent mainnet.
+- **In the SP1 zkVM, HC costs about the same cycles as Zstd + Dict.** HC Updates uses 5–31% fewer cycles on 6 of
+  7 chains and 4.4% more on Polygon (Section 5).
 - **Ethereum blob DA is cheap and volatile.** Base, the largest blob user, paid a mean of
   **$269/day** for blobs (range $19–$840/day). Smaller rollups pay $0.10–$54/day (Section 1).
 - **Bitcoin DA is ~1,500× more expensive per MB** than Base's blob cost. Citrea pays **~$242/MB**.
@@ -126,6 +132,50 @@ $5/day at 1 sat/vB and about $25/day at 5 sat/vB.
 **Conclusion:** on Citrea's current format the gain comes entirely from the trained dictionary. HC's
 structural coding needs the address and slot that Citrea's hashed keys remove, so HC alone adds nothing.
 
+## 3b. Alpen (Strata) on Bitcoin Signet
+
+Alpen is not on mainnet. Its docs say it runs on the default Bitcoin Signet, with mainnet support planned.
+Everything below is from Signet.
+
+**Format.** This was verified from the source and from real blobs.
+- Alpen EE posts a `DaBlob` ([`alpen-ee` `crates/da/types/src/blob.rs`](https://github.com/alpenlabs/alpen-ee)).
+  It contains a 56 B EVM header summary and a `BatchStateDiff` (`crates/reth/statediff/src/batch/*`):
+  - accounts: a balance delta, a nonce delta and the code hash
+  - **storage grouped by plain 20 B address, with 32 B slot keys and trimmed new values** (no old values)
+  - the full bytecode of deployed contracts
+- It is encoded with `strata_codec` and **not compressed**. Alpen's own DA-fee code says: "no discount,
+  compression, or fixed-overhead adjustment is applied".
+- The blob is split into Taproot envelope chunks. The commit tx carries `OP_RETURN` with `"ALPN"` and the blob version.
+- Strata (OL) separately posts account-level checkpoint diffs, which contain no EVM storage.
+
+**Data.**
+- Signet heights 332,207–332,646 contain **37 consecutive EE DA blobs** (update seq 1546–1582, no gaps).
+  Each covers 1,440 L2 blocks.
+- They were reassembled from the reveal witnesses with
+  [`alpen_signet_scan.py`](scripts/alpen_signet_scan.py) and [`alpen_signet_blobs.py`](scripts/alpen_signet_blobs.py).
+- All 37 parse to the last byte with [`alpen_parse_blob.py`](scripts/alpen_parse_blob.py).
+- Totals: 77,263 B, 414 storage slots, 5 deployed bytecodes. Storage is 25.7% of all bytes, and 69–92% in
+  batches without bytecode.
+
+**Result.** Dictionaries were trained on the earlier 18 blobs; the results below are on the later 19 (232 storage slots,
+~12 per batch). Zstd uses level 19.
+
+| | Bytes | vs as posted |
+|---|---:|---:|
+| Whole blob as posted (uncompressed) | 31,279 | — |
+| Brotli-11 | 18,450 | +41.0% |
+| Zstd-19 | 18,429 | +41.1% |
+| **Zstd-19 + 112 KB trained dictionary** | **9,897** | **+68.4%** |
+| Rest Zstd-19 + dict, storage Zstd-19 + dict | 10,085 | +67.8% |
+| Rest Zstd-19 + dict, storage HC + dict | 11,135 | +64.4% |
+| *Storage part only:* as posted / Zstd-19 + dict / HC + dict | 10,862 / **4,340** / 5,390 | — / +60.0% / +50.4% |
+
+HC is 24% larger than Zstd + Dict on the storage part. It is still 4,706 B vs 4,340 B even without HC's 36 B
+per-blob header. With so few slots per batch, the dictionary captures the repeated contracts and slots.
+HC's structural coding has nothing left to add.
+
+Signet fees have no market value, so no cost figure is given.
+
 ## 4. HC on EVM state diffs at real batch sizes
 
 **Data and method:**
@@ -193,8 +243,23 @@ about **$10/day**. The figure scales linearly with the blob price, which ranged 
   - the 107-byte journal matches the manifest
   - `exit_code == 0`
   - HC and Raw payload commitments are identical
-- Per-fixture SP1 cycle counts are in the CI artifact `sp1-execute-report` (`sp1_multichain_execute_report.md`).
+- All 28 fixtures passed in CI run 45909469689 (commit `c05de04`). The full report is in
+  [`data/sp1_multichain_execute_report_ci45909469689.md`](data/sp1_multichain_execute_report_ci45909469689.md).
+
+SP1 v6.10.0 cycles for each fixture, including the SHA-256 precompile and the guest's blob and dictionary hashing:
+
+| Chain (batch) | Raw Zstd | Raw Zstd + Dict | HC Updates + Dict | HC Deltas + Dict | HC Updates vs Zstd + Dict |
+|---|---:|---:|---:|---:|---:|
+| Base (161) | 35,590,019 | 36,061,435 | 34,244,857 | 37,924,645 | −5.0% |
+| OP Mainnet (63) | 8,996,299 | 10,179,966 | 9,512,911 | 10,680,036 | −6.6% |
+| Unichain (452) | 737,489 | 1,160,377 | 1,016,416 | 1,058,172 | −12.4% |
+| Taiko (192) | 507,318 | 803,511 | 553,949 | 1,021,741 | −31.1% |
+| Ethereum L1 (50) | 78,137,491 | 77,255,972 | 69,820,499 | 79,960,071 | −9.6% |
+| Polygon PoS (100) | 111,790,626 | 109,556,914 | 114,340,552 | 130,802,234 | +4.4% |
+| Gnosis (100) | 10,253,323 | 11,994,628 | 11,114,921 | 12,187,093 | −7.3% |
+
 - Real CUDA proving (`run_sp1_gpu_bench.sh` without flags) needs an NVIDIA GPU and has **not been run yet**.
+  Proving time and cost per batch are therefore not yet measured.
 
 ## Reproduce
 
@@ -205,6 +270,7 @@ about **$10/day**. The figure scales linearly with the blob price, which ranged 
 | Profile table | `python -I scripts/rollup_da_profile.py <dir> data/eth_usd_2026-11.txt data/l2_blocks_per_day_2026-11-25.json <out.json>` |
 | Citrea proofs | `python -I scripts/citrea_fetch_proofs.py <num_btc_blocks> <out.json>` (raw copy: [`data/raw/`](data/raw/)) |
 | Citrea Bitcoin fees | `python -I scripts/citrea_bitcoin_txs.py <heights…>`, then `scripts/citrea_da_cost.py` |
+| Alpen Signet blobs | `scripts/alpen_signet_scan.py <n_blocks> <out.json> [last_height]`, then `alpen_signet_blobs.py`, then `alpen_parse_blob.py` (raw copy: [`data/raw/`](data/raw/)) |
 | SP1 fixtures | `cd zkvm/sp1-host && bash run_sp1_gpu_bench.sh --execute-only` |
 
 The Brotli and Zstd baselines can be recomputed by anyone from the raw data. The HC blobs and dictionaries are

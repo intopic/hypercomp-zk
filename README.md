@@ -30,9 +30,11 @@ All figures are measured on real mainnet data with chronological train/test spli
   **+7.7% to +12.8%** (`StateDeltas`); against plain Zstd / Brotli q=11 by **+8% to +22%**.
 - **Citrea (Bitcoin):** Citrea's current DA payload uses hashed storage keys and 256 block hashes per proof; on it a
   trained Zstd dictionary alone gives **+6.9%** and HC adds nothing. Citrea's measured DA bill is **~$155/day** (~$242/MB).
+- **Alpen (Bitcoin Signet):** Alpen posts plain `(address, slot, value)` diffs uncompressed; a trained Zstd
+  dictionary alone shrinks them by **68.4%**, and at its current ~12 slots per batch HC adds nothing on top.
 - **Ethereum blob DA:** Base, the largest blob user, paid a mean **$269/day** for blobs over 7 days (range $19–$840/day).
-- **Every fixture is executed inside the real SP1 v6 zkVM in CI** with exact 107-byte journal parity; real GPU proving
-  has not yet been run.
+- **Every fixture is executed inside the real SP1 v6 zkVM in CI** with exact 107-byte journal parity; HC Updates needs
+  5–31% fewer SP1 cycles than Zstd + Dict on 6 of 7 chains (+4.4% on Polygon). Real GPU proving has not yet been run.
 - **Decoder safety envelope:** unified `DecodeLimits::CONSENSUS` (100k slots, 8 MiB pre-entropy, 8 MiB Zstd window,
   16 MiB output, mandatory `Frame_Content_Size` + XXH64) bounds worst-case cumulative bump-allocator RAM to ~50–51 MiB;
   zkVM guests should provision >= 96 MiB.

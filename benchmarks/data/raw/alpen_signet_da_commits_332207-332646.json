@@ -1,0 +1,372 @@
+[
+ {
+  "height": 332214,
+  "commit_txid": "fb69c36774fa59e3ef975035ff231c46f8a3ba5aa7a0cc735065618e0c33d445",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 1205,
+  "total_fee_sat": 928,
+  "total_vbytes": 592.0,
+  "file": "332214_fb69c36774fa.bin"
+ },
+ {
+  "height": 332220,
+  "commit_txid": "f60e0ddca07a9682926dd4778f78e88c5c5ee3f3f630a266828791ace72eccaa",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 255,
+  "total_fee_sat": 177,
+  "total_vbytes": 353.0,
+  "file": "332220_f60e0ddca07a.bin"
+ },
+ {
+  "height": 332229,
+  "commit_txid": "120f8d0b6659fd72266bbddd6d640377247da8a4a229717ece4700bc73cc919b",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 360,
+  "total_fee_sat": 191,
+  "total_vbytes": 379.5,
+  "file": "332229_120f8d0b6659.bin"
+ },
+ {
+  "height": 332235,
+  "commit_txid": "e99c375e710ccd9825cab54bf09496d0266a650871758e1524ae04f41ac1db15",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 36698,
+  "total_fee_sat": 4759,
+  "total_vbytes": 9516.5,
+  "file": "332235_e99c375e710c.bin"
+ },
+ {
+  "height": 332247,
+  "commit_txid": "65034a683562bbd0c7653dac6a117c0865d134688bfe839fda91636bbe4ce2cc",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 255,
+  "total_fee_sat": 177,
+  "total_vbytes": 353.0,
+  "file": "332247_65034a683562.bin"
+ },
+ {
+  "height": 332263,
+  "commit_txid": "9f0eed6f1cb506fb1000b80082582605df2b7fa67f446ae2562c416d86fcf8a9",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 360,
+  "total_fee_sat": 191,
+  "total_vbytes": 379.5,
+  "file": "332263_9f0eed6f1cb5.bin"
+ },
+ {
+  "height": 332279,
+  "commit_txid": "57257194e00c9fb52cbad555be90684c6a3fb89e0291ab2e2a2056a948c9c32e",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 360,
+  "total_fee_sat": 191,
+  "total_vbytes": 379.5,
+  "file": "332279_57257194e00c.bin"
+ },
+ {
+  "height": 332296,
+  "commit_txid": "aa6081f160031cd695533e5065faa35fc253a76c6471236ed9e17116d5f9aec6",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 596,
+  "total_fee_sat": 220,
+  "total_vbytes": 439.0,
+  "file": "332296_aa6081f16003.bin"
+ },
+ {
+  "height": 332312,
+  "commit_txid": "53e497572d2595ddc20226511b4402241f301ab8d45f8e87584224c5ed5187da",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 596,
+  "total_fee_sat": 220,
+  "total_vbytes": 439.0,
+  "file": "332312_53e497572d25.bin"
+ },
+ {
+  "height": 332322,
+  "commit_txid": "560dc245be16cf78de3a5352865aab395141516003869b0e876dfc4bc7adc0ee",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 360,
+  "total_fee_sat": 191,
+  "total_vbytes": 379.5,
+  "file": "332322_560dc245be16.bin"
+ },
+ {
+  "height": 332337,
+  "commit_txid": "49a5d53368a736eaf3cabf6f950a03b980915887952960db7dc5314b6d93f23a",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 360,
+  "total_fee_sat": 191,
+  "total_vbytes": 379.5,
+  "file": "332337_49a5d53368a7.bin"
+ },
+ {
+  "height": 332350,
+  "commit_txid": "98bbd17e8ed6793a8f96815dc021d8be2fcdf8d105dcceee70fd6b6d16e9a122",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 360,
+  "total_fee_sat": 191,
+  "total_vbytes": 379.5,
+  "file": "332350_98bbd17e8ed6.bin"
+ },
+ {
+  "height": 332365,
+  "commit_txid": "a3939bcbdb12b866bff0752a902b1b87a6ecc2e3112061bfffb2f08114deaa59",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 688,
+  "total_fee_sat": 232,
+  "total_vbytes": 462.0,
+  "file": "332365_a3939bcbdb12.bin"
+ },
+ {
+  "height": 332374,
+  "commit_txid": "a10880d3937f14120174b72596e253648798c09aefd0a2b8065956864a7ee3c9",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 698,
+  "total_fee_sat": 233,
+  "total_vbytes": 464.5,
+  "file": "332374_a10880d3937f.bin"
+ },
+ {
+  "height": 332385,
+  "commit_txid": "ac365597f8aa34489d644fb756841ca05460d1a358941f73730cb19bc251e05d",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 793,
+  "total_fee_sat": 245,
+  "total_vbytes": 488.5,
+  "file": "332385_ac365597f8aa.bin"
+ },
+ {
+  "height": 332398,
+  "commit_txid": "1d4f71f629be47cb6aecef831cf0f68ab4233ab65acdc37a3c44697e41234d2f",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 649,
+  "total_fee_sat": 227,
+  "total_vbytes": 452.2,
+  "file": "332398_1d4f71f629be.bin"
+ },
+ {
+  "height": 332411,
+  "commit_txid": "0bb85cb3550101335c6d0720d1f81c9fa139abc9b2c49723af33e924cd3d0aa2",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 596,
+  "total_fee_sat": 220,
+  "total_vbytes": 439.0,
+  "file": "332411_0bb85cb35501.bin"
+ },
+ {
+  "height": 332419,
+  "commit_txid": "4f9b1f731be375762b514045974b76235f9798580f19fb52b61769378d8e30c2",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 795,
+  "total_fee_sat": 245,
+  "total_vbytes": 489.0,
+  "file": "332419_4f9b1f731be3.bin"
+ },
+ {
+  "height": 332431,
+  "commit_txid": "282786af82d4bb83e9053037109fa350ab37b86af0f2bd74e6e26457debc03e1",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 764,
+  "total_fee_sat": 241,
+  "total_vbytes": 481.0,
+  "file": "332431_282786af82d4.bin"
+ },
+ {
+  "height": 332446,
+  "commit_txid": "a095e3a1a35011a728b12a75d22f6c656b1ff566eac70ae5d0d80c47bcc8cb59",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 558,
+  "total_fee_sat": 215,
+  "total_vbytes": 429.2,
+  "file": "332446_a095e3a1a350.bin"
+ },
+ {
+  "height": 332455,
+  "commit_txid": "a1b463b6afd9ab1a5801d634b4df7998d091b5d7921cf58872a100eb4d0b5afa",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 596,
+  "total_fee_sat": 220,
+  "total_vbytes": 439.0,
+  "file": "332455_a1b463b6afd9.bin"
+ },
+ {
+  "height": 332465,
+  "commit_txid": "d53ccba1d1697879335cae0a30d05afd112fe6421cf4a419b30af1174d23ac50",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 16246,
+  "total_fee_sat": 2188,
+  "total_vbytes": 4374.0,
+  "file": "332465_d53ccba1d169.bin"
+ },
+ {
+  "height": 332473,
+  "commit_txid": "6ad00ec81413c60fa48e8016c08bc9415b291211bcf86f2c2cfd5b925fd8500d",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 993,
+  "total_fee_sat": 270,
+  "total_vbytes": 538.5,
+  "file": "332473_6ad00ec81413.bin"
+ },
+ {
+  "height": 332489,
+  "commit_txid": "bd8d27aba748a3b1f87bf4f5597e122c5865a1bf45aae8c4cefda4be21fb5b17",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 784,
+  "total_fee_sat": 244,
+  "total_vbytes": 486.2,
+  "file": "332489_bd8d27aba748.bin"
+ },
+ {
+  "height": 332506,
+  "commit_txid": "a7bad7109c72ea0987dbabe839b41a0466ca5071fba9aa0babc061f0ce3babab",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 887,
+  "total_fee_sat": 257,
+  "total_vbytes": 512.0,
+  "file": "332506_a7bad7109c72.bin"
+ },
+ {
+  "height": 332516,
+  "commit_txid": "5d7b57db325d43f9d64143100094923c2f299df7f35239152f4c11c45ba8e2d5",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 794,
+  "total_fee_sat": 245,
+  "total_vbytes": 488.8,
+  "file": "332516_5d7b57db325d.bin"
+ },
+ {
+  "height": 332528,
+  "commit_txid": "23f9c17b75a4c8f9f9dcc9b34f5fcf42ba511c9333e57670f43d538b2e8e1ff2",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 794,
+  "total_fee_sat": 245,
+  "total_vbytes": 488.8,
+  "file": "332528_23f9c17b75a4.bin"
+ },
+ {
+  "height": 332540,
+  "commit_txid": "f6eeccc638e88e5e0fc4681e4e12258d9bddee38f2e47cd506dd0ddca88b7b9e",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 516,
+  "total_fee_sat": 210,
+  "total_vbytes": 418.5,
+  "file": "332540_f6eeccc638e8.bin"
+ },
+ {
+  "height": 332553,
+  "commit_txid": "86745d8f971b4657a4dfcab7664aba34f5701c279cecb908b776db25dc0fedbf",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 795,
+  "total_fee_sat": 245,
+  "total_vbytes": 489.0,
+  "file": "332553_86745d8f971b.bin"
+ },
+ {
+  "height": 332565,
+  "commit_txid": "3466ab3748010e202e188b2f9d4fd6f9988d14ba320c4d44a763f9569e606f0f",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 794,
+  "total_fee_sat": 245,
+  "total_vbytes": 488.8,
+  "file": "332565_3466ab374801.bin"
+ },
+ {
+  "height": 332571,
+  "commit_txid": "128d0ffacd9c66764d0936a25766f3e0d9e59d189334dd095e24d0c75287daac",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 558,
+  "total_fee_sat": 215,
+  "total_vbytes": 429.2,
+  "file": "332571_128d0ffacd9c.bin"
+ },
+ {
+  "height": 332585,
+  "commit_txid": "8e7be5b181082de311602c05ba7d36c1046d3ec37ea9ae87c002dd24c5eca5f5",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 591,
+  "total_fee_sat": 220,
+  "total_vbytes": 437.5,
+  "file": "332585_8e7be5b18108.bin"
+ },
+ {
+  "height": 332596,
+  "commit_txid": "c64eb0fbc270181112e5c4874ce32e9682fa514afc197431f579c11a27d32213",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 947,
+  "total_fee_sat": 264,
+  "total_vbytes": 527.0,
+  "file": "332596_c64eb0fbc270.bin"
+ },
+ {
+  "height": 332614,
+  "commit_txid": "76c6a5c6a07401730b20aba9e9db6798e2b180e4a84df6b376e8cadb210e3ec1",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 686,
+  "total_fee_sat": 668,
+  "total_vbytes": 461.5,
+  "file": "332614_76c6a5c6a074.bin"
+ },
+ {
+  "height": 332619,
+  "commit_txid": "b9a04c0aadb5ee7c1bbf90aadc93f19b71df61fb76fcc7fc79c5aa89f13c7bd3",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 1063,
+  "total_fee_sat": 279,
+  "total_vbytes": 556.2,
+  "file": "332619_b9a04c0aadb5.bin"
+ },
+ {
+  "height": 332629,
+  "commit_txid": "e9e79c3f187bf746952b5dc790da3046fe38824e7edc4945f821d57328198fa6",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 596,
+  "total_fee_sat": 220,
+  "total_vbytes": 439.0,
+  "file": "332629_e9e79c3f187b.bin"
+ },
+ {
+  "height": 332642,
+  "commit_txid": "5f4f399f6c2e16e79f8a620e158f2514fa61b79054e05cd495f6cb19936c4431",
+  "version": 1,
+  "reveal_txs": 1,
+  "blob_bytes": 2317,
+  "total_fee_sat": 437,
+  "total_vbytes": 871.5,
+  "file": "332642_5f4f399f6c2e.bin"
+ }
+]

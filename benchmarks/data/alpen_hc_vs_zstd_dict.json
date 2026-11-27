@@ -1,0 +1,23 @@
+{
+  "blobs": 37,
+  "bytes": {
+    "rest_zstd19_dict_plus_storage_hc_dict": 11135,
+    "rest_zstd19_dict_plus_storage_zstd19_dict": 10085,
+    "storage_as_posted": 10862,
+    "storage_brotli11": 10673,
+    "storage_hc_dict": 5390,
+    "storage_zstd19_dict": 4340,
+    "whole_as_posted": 31279,
+    "whole_brotli11": 18450,
+    "whole_zstd19": 18429,
+    "whole_zstd19_dict": 9897
+  },
+  "note": "Alpen posts blobs uncompressed; dictionaries trained only on the earlier half",
+  "seq_range": [
+    1546,
+    1582
+  ],
+  "test": 19,
+  "test_storage_slots": 232,
+  "train": 18
+}
